@@ -7,6 +7,14 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+### Dashboard (read-only)
+- Preferred CLI: `xrp-dashboard`
+- Alternative launcher: `python -m streamlit run src/xrp_bot/dashboard.py`
+
+Windows (PowerShell/CMD):
+- Activate venv: `.venv\\Scripts\\activate`
+- Run dashboard: `xrp-dashboard`
+- Alternative: `python -m streamlit run src/xrp_bot/dashboard.py`
 
 
 ## Troubleshooting
