@@ -52,3 +52,4 @@ python -m compileall src
 PYTHONPATH=src pytest -q
 ```
 
+

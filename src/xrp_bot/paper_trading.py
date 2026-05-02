@@ -2,6 +2,7 @@
 from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 import json
+
 from pathlib import Path
 import pandas as pd
 from .signal_engine import stage3_analysis
@@ -68,13 +69,3 @@ def evaluate_paper_signal(df: pd.DataFrame, interval: str, higher_tf_df: pd.Data
     last = df.iloc[-1]; close = float(last.get("close", 0.0)); atr = float(last.get("atr_14", 0.0))
     return PaperDecision(signal=analysis.signal, score=float(analysis.score), explanation=analysis.explanation, regime=analysis.regime, atr=atr, adx=float(last.get("adx_14", 0.0)), support=float(last.get("bb_lower", close-atr)), resistance=float(last.get("bb_upper", close+atr)), stop_loss=max(close-1.5*atr,0.0), take_profit=close+3.0*atr, higher_timeframe_confirmation=higher_tf_df is not None)
 
-def append_event_jsonl(path: Path | str, decision: PaperDecision, interval: str) -> None:
-    p = Path(path); p.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"interval": interval, "signal": decision.signal, "signal_score": decision.score, "signal_explanation": decision.explanation, "market_regime": decision.regime, "atr": decision.atr, "adx": decision.adx, "support": decision.support, "resistance": decision.resistance, "stop_loss": decision.stop_loss, "take_profit": decision.take_profit, "higher_timeframe_confirmation": decision.higher_timeframe_confirmation}
-    with p.open("a", encoding="utf-8") as f: f.write(json.dumps(payload)+"\n")
-
-def run_paper_cycle(df: pd.DataFrame, interval: str, state: PaperState, event_path: Path | str) -> dict:
-    decision = evaluate_paper_signal(df, interval=interval)
-    state.trade_count += 1
-    append_event_jsonl(event_path, decision, interval)
-    return {"signal": decision.signal, "market_regime": decision.regime, "signal_score": decision.score}
