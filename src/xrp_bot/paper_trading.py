@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from .signal_engine import stage3_analysis
+from .journal import append_journal_entry
 
 
 @dataclass
