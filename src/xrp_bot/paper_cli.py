@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import signal
 import time
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
@@ -10,14 +11,8 @@ from logging.handlers import RotatingFileHandler
 from .config import ALLOWED_SYMBOLS, DEFAULT_INTERVAL, PAPER_LOG_FILE, SUPPORTED_INTERVALS
 from .data_fetcher import BinanceMarketDataFetcher
 from .indicators import add_indicators
-from .paper_trading import (
-    PaperTradeConfig,
-    append_trade_event,
-    generate_signal,
-    load_state,
-    risk_status,
-    save_state,
-)
+from .monitoring import format_alert, load_runtime_state, save_runtime_state, send_telegram_message, summarize_day
+from .paper_trading import PaperTradeConfig, append_trade_event, generate_signal, load_state, risk_status, save_state
 from .safety import block_private_keys, ensure_paper_trading_only
 
 
@@ -42,15 +37,42 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--loop", action="store_true")
     p.add_argument("--sleep-seconds", type=int, default=60)
     p.add_argument("--reset-state", action="store_true")
+    p.add_argument("--command", default="")
     return p.parse_args()
 
 
-def run_once(args, fetcher, cfg, logger):
+def handle_command(command: str, runtime, state, price: float, risk: str) -> str:
+    cmd = command.strip().lower()
+    if cmd == "/pause":
+        runtime.active = False
+        return "Paper trading paused."
+    if cmd == "/resume":
+        runtime.active = True
+        return "Paper trading resumed."
+    if cmd == "/resetpaper":
+        state.open_position = None
+        state.trade_history = []
+        state.realized_pnl = 0.0
+        state.daily_realized_pnl = 0.0
+        return "Paper state reset."
+    if cmd == "/status":
+        return f"Status: {'ACTIVE' if runtime.active else 'PAUSED'} | Balance: {state.fake_balance:.2f} | Price: {price:.6f}"
+    if cmd == "/risk":
+        return f"Risk: {risk} | Daily PnL: {state.daily_realized_pnl:.2f}"
+    if cmd == "/summary":
+        d = summarize_day(state)
+        return f"Trades: {d['total_simulated_trades']} | Win rate: {d['win_rate']:.2f}% | PnL: {d['daily_pnl']:.2f}"
+    return "Unsupported command."
+
+
+def run_once(args, fetcher, cfg, logger, command: str | None = None):
     ensure_paper_trading_only()
     block_private_keys({})
     state = load_state(initial_balance=args.balance)
+    runtime = load_runtime_state()
     today = datetime.now(timezone.utc).date().isoformat()
     state.reset_daily_if_needed(today)
+    runtime.last_heartbeat = datetime.now(timezone.utc).isoformat()
 
     df = add_indicators(fetcher.fetch_klines(symbol=args.symbol, interval=args.interval, limit=120))
     row = df.iloc[-1]
@@ -58,9 +80,23 @@ def run_once(args, fetcher, cfg, logger):
     candle_time = row["close_time"].isoformat()
     price = float(row["close"])
     signal = generate_signal(df)
+
+    if command:
+        msg = handle_command(command, runtime, state, price, risk_status(state, cfg))
+        save_runtime_state(runtime)
+        save_state(state, price)
+        send_telegram_message(msg)
+        print(msg)
+        return
+
+    if not runtime.active:
+        save_runtime_state(runtime)
+        save_state(state, price)
+        send_telegram_message("Heartbeat: bot alive; paper trading paused.")
+        return
+
     action = "SKIP"
     reason = "NO_SIGNAL"
-
     if state.open_position:
         low, high = float(row["low"]), float(row["high"])
         pos = state.open_position
@@ -90,15 +126,31 @@ def run_once(args, fetcher, cfg, logger):
     elif action == "SKIP" and signal == "BUY":
         reason = rstatus
 
-    event = {"timestamp": now_iso, "symbol": args.symbol, "interval": args.interval, "event_type": action, "signal": signal, "price": price, "quantity": (state.open_position.size if state.open_position else 0.0), "fake_balance": state.fake_balance, "realized_pnl": state.realized_pnl, "reason": reason}
+    event = {
+        "timestamp": now_iso, "symbol": args.symbol, "interval": args.interval, "event_type": action,
+        "signal": signal, "signal_label": signal, "signal_score": 1.0 if signal == "BUY" else 0.2,
+        "signal_explanation": reason, "market_regime": "bullish" if signal == "BUY" else "neutral",
+        "support": float(row["bb_lower"]), "resistance": float(row["bb_upper"]), "price": price,
+        "stop_loss": state.open_position.stop_loss if state.open_position else 0.0,
+        "take_profit": state.open_position.take_profit if state.open_position else 0.0,
+        "quantity": (state.open_position.size if state.open_position else 0.0), "fake_balance": state.fake_balance,
+        "realized_pnl": state.realized_pnl, "unrealized_pnl": state.unrealized_pnl(price), "risk_status": rstatus, "reason": reason,
+    }
     append_trade_event(event)
     logger.info(json.dumps(event))
+    save_runtime_state(runtime)
     save_state(state, price)
-
-    print(f"Current price: {price:.6f}\nSignal: {signal}\nFake balance: {state.fake_balance:.2f}\nOpen position: {state.open_position.side if state.open_position else 'NONE'}\nRealized PnL: {state.realized_pnl:.2f}\nUnrealized PnL: {state.unrealized_pnl(price):.2f}\nNumber of trades today: {state.trades_today}\nRisk status: {risk_status(state, cfg)}")
+    send_telegram_message(format_alert(event))
 
 
 def main():
+    should_run = {"value": True}
+
+    def _shutdown_handler(signum, _frame):
+        should_run["value"] = False
+
+    signal.signal(signal.SIGINT, _shutdown_handler)
+    signal.signal(signal.SIGTERM, _shutdown_handler)
     args = parse_args()
     if args.symbol not in ALLOWED_SYMBOLS:
         raise ValueError("Unsupported symbol")
@@ -108,11 +160,16 @@ def main():
     if not args.once and not args.loop:
         args.once = True
     if args.loop:
-        while True:
-            run_once(args, fetcher, cfg, logger)
+        while should_run["value"]:
+            try:
+                run_once(args, fetcher, cfg, logger, args.command or None)
+            except Exception as exc:
+                logger.exception("Unhandled error in paper loop")
+                send_telegram_message(f"SYSTEM ERROR: {exc}")
             time.sleep(max(1, args.sleep_seconds))
+        logger.info("Graceful shutdown received; exiting paper loop")
     else:
-        run_once(args, fetcher, cfg, logger)
+        run_once(args, fetcher, cfg, logger, args.command or None)
 
 
 if __name__ == "__main__":

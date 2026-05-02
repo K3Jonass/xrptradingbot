@@ -1,0 +1,26 @@
+services:
+  xrp-paper:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+    command: ["xrp-paper", "--loop", "--sleep-seconds", "60"]
+  xrp-healthcheck:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+    command: ["xrp-healthcheck"]
+  test:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    command: ["bash", "-lc", "python -m compileall src tests && PYTHONPATH=src python scripts/smoke_test.py && PYTHONPATH=src pytest -q"]

@@ -43,3 +43,9 @@ paper_trading:
   max_daily_loss_pct: 0.05
   max_trades_per_day: 5
   max_open_position: 1
+
+telegram:
+  enabled: false
+  bot_token: ""
+  chat_id: ""
+  base_url: "https://api.telegram.org"
