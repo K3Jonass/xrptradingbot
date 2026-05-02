@@ -28,13 +28,7 @@ xrp-backtest --fixture tests/fixtures/xrpusdt_1h_sample.json
 
 ### Live paper trading simulator (simulation-only)
 ```bash
-xrp-paper --once
-```
 
-### Local dashboard (read-only monitoring)
-```bash
-xrp-dashboard
-```
 
 The dashboard reads local artifacts only:
 - `data/paper_state.json`
@@ -57,3 +51,4 @@ Safety constraints:
 python -m compileall src
 PYTHONPATH=src pytest -q
 ```
+

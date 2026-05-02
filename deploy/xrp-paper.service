@@ -1,0 +1,16 @@
+[Unit]
+Description=XRP Paper Trading Bot (paper-only)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/xrptradingbot
+EnvironmentFile=/opt/xrptradingbot/.env
+ExecStart=/opt/xrptradingbot/.venv/bin/xrp-paper --loop --sleep-seconds 60
+Restart=always
+RestartSec=5
+User=ubuntu
+Group=ubuntu
+
+[Install]
+WantedBy=multi-user.target
