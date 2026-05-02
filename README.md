@@ -16,6 +16,25 @@ Windows (PowerShell/CMD):
 - Run dashboard: `xrp-dashboard`
 - Alternative: `python -m streamlit run src/xrp_bot/dashboard.py`
 
+### Paper Trading Cycle (safe simulation only)
+- Run one cycle: `xrp-paper --once`
+- `--once` prints a full cycle JSON payload with:
+  - `current_price`, `signal_label`, `signal_score`, `signal_explanation`
+  - `market_regime`, `support`, `resistance`
+  - `atr_stop_loss`, `atr_take_profit`
+  - `fake_balance`, `open_position`, `realized_pnl`, `unrealized_pnl`
+  - `risk_status`, `event_type` (`OPEN`, `CLOSE`, `SKIP`)
+- If no trade opens, payload includes:
+  - `event_type: SKIP`
+  - `reason: signal did not meet entry criteria`
+- The cycle always persists files:
+  - `data/paper_state.json`
+  - `data/paper_trades.jsonl`
+- Safety guarantees remain unchanged:
+  - `PAPER_TRADING_ONLY = True`
+  - No private Binance API usage
+  - No real order execution
+
 
 ## Troubleshooting
 - **pandas missing**: run `pip install pandas` (or reinstall with `pip install -r requirements-dev.txt`).
