@@ -20,6 +20,8 @@ from xrp_bot.prediction import train_and_predict
 
 def _load_fixture_df() -> tuple[Path, object]:
     root = Path(__file__).resolve().parents[1]
+    if not (root / "tests" / "fixtures" / "xrpusdt_1h_sample.json").exists():
+        root = root.parent
     fixture = root / "tests" / "fixtures" / "xrpusdt_1h_sample.json"
     raw = json.loads(fixture.read_text(encoding="utf-8"))
     df = add_indicators(BinanceMarketDataFetcher._normalize_klines(raw))

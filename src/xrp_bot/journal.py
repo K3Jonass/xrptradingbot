@@ -88,12 +88,18 @@ def analyze_closed_trade(trade: dict) -> dict:
 def append_journal_entry(trade: dict, path: Path | str = JOURNAL_FILE) -> dict:
     analysis = analyze_closed_trade(trade)
     pnl = float(trade.get("realized_pnl", 0.0))
+    signal_explanation = (
+        trade.get("signal_explanation")
+        or trade.get("explanation")
+        or trade.get("explanation_notes")
+        or ""
+    )
     payload = JournalEntry(
         timestamp=trade.get("timestamp", datetime.now(timezone.utc).isoformat()),
         strategy_name=trade.get("strategy_name", "unknown"),
         signal_label=trade.get("signal_label", trade.get("signal", "HOLD")),
         signal_score=float(trade.get("signal_score", 0.0)),
-        signal_explanation=trade.get("signal_explanation", ""),
+        signal_explanation=signal_explanation,
         market_regime=trade.get("market_regime", "unknown"),
         entry_reason=trade.get("entry_reason", ""),
         exit_reason=trade.get("exit_reason", ""),
@@ -125,6 +131,11 @@ def load_journal(path: Path | str = JOURNAL_FILE) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame()
     df = pd.DataFrame(rows)
+    if "signal_explanation" not in df.columns:
+        if "explanation" in df.columns:
+            df["signal_explanation"] = df["explanation"].fillna("")
+        elif "explanation_notes" in df.columns:
+            df["signal_explanation"] = df["explanation_notes"].fillna("")
     defaults = {
         "strategy_name": "unknown",
         "signal_label": "HOLD",
