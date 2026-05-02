@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xrp-market-analyzer"
-version = "0.2.1"
+version = "0.3.0"
 description = "Stage 1 XRP/USDT market analyzer using Binance public data"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,6 +26,7 @@ dev = [
 [project.scripts]
 xrp-analyze = "xrp_bot.cli:main"
 xrp-backtest = "xrp_bot.backtest_cli:main"
+xrp-paper = "xrp_bot.paper_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

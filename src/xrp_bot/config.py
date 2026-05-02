@@ -12,7 +12,10 @@ CONFIG_FILE = BASE_DIR / "config" / "settings.yaml"
 LOG_DIR = BASE_DIR / "logs"
 DATA_DIR = BASE_DIR / "data"
 REPORT_FILE = DATA_DIR / "latest_report.json"
+PAPER_STATE_FILE = DATA_DIR / "paper_state.json"
+PAPER_TRADES_FILE = DATA_DIR / "paper_trades.jsonl"
 LOG_FILE = LOG_DIR / "analyzer.log"
+PAPER_LOG_FILE = LOG_DIR / "paper_trader.log"
 
 
 def load_settings() -> dict[str, Any]:
@@ -33,3 +36,6 @@ DEFAULT_INTERVAL = APP["default_interval"]
 DEFAULT_LIMIT = APP["candle_limit"]["default"]
 MIN_LIMIT = APP["candle_limit"]["min"]
 MAX_LIMIT = APP["candle_limit"]["max"]
+
+PAPER_TRADING = SETTINGS.get("paper_trading", {})
+PAPER_TRADING_ONLY = True
