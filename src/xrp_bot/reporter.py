@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -14,7 +14,7 @@ def build_report_payload(interval: str, df: pd.DataFrame, analysis: dict, predic
     """Build a serializable analysis payload for console and file output."""
     latest = df.iloc[-1]
     return {
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "symbol": SYMBOL,
         "interval": interval,
         "latest_candle_close_time": latest["close_time"].isoformat(),

@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import streamlit as st
 
 
 STATE_FILE = Path("data/paper_state.json")
@@ -84,6 +83,8 @@ def calculate_dashboard_metrics(state: dict, trades_df: pd.DataFrame) -> dict:
 
 
 def run_dashboard() -> None:
+    import streamlit as st
+
     st.set_page_config(page_title="XRP Paper Trading Dashboard", layout="wide")
     st.title("XRP Paper Trading Dashboard (Read-only)")
 

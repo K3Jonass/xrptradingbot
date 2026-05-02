@@ -27,6 +27,22 @@ class PredictionResult:
     feature_timestamp: str
 
 
+class _FallbackMajorityModel:
+    def fit(self, X, y):
+        counts = pd.Series(y).value_counts()
+        self.majority = int(counts.index[0]) if not counts.empty else 1
+        self.n_classes = max(3, int(pd.Series(y).nunique() or 3))
+        return self
+
+    def predict(self, X):
+        return np.full(len(X), self.majority, dtype=int)
+
+    def predict_proba(self, X):
+        out = np.zeros((len(X), self.n_classes), dtype=float)
+        out[:, self.majority] = 1.0
+        return out
+
+
 def _market_regime(adx: float, ema_fast: float, ema_slow: float) -> int:
     if pd.isna(adx) or pd.isna(ema_fast) or pd.isna(ema_slow):
         return 0
@@ -127,9 +143,12 @@ def train_and_predict(df: pd.DataFrame) -> tuple[PredictionResult, dict[str, Any
         model = RandomForestClassifier(n_estimators=150, random_state=42)
     elif model_type == "gradient_boosting" and GradientBoostingClassifier is not None:
         model = GradientBoostingClassifier(random_state=42)
-    else:
+    elif LogisticRegression is not None:
         model = LogisticRegression(max_iter=1000, multi_class="auto")
         model_type = "logistic_regression"
+    else:
+        model = _FallbackMajorityModel()
+        model_type = "fallback_majority"
 
     splits = time_series_splits(len(work), n_splits=3)
     preds: list[int] = []

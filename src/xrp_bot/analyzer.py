@@ -21,6 +21,17 @@ class MarketAnalysis:
     stop_loss: float
     take_profit: float
     notes: list[str]
+    signal_explanation: str
+
+    @property
+    def explanation(self) -> str:
+        """Backward-compatible alias used by older code paths."""
+        return self.signal_explanation
+
+    @property
+    def explanation_notes(self) -> str:
+        """Backward-compatible alias for legacy payload names."""
+        return self.signal_explanation
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -111,4 +122,19 @@ def detect_market_conditions(df: pd.DataFrame, higher_tf_df: pd.DataFrame | None
         f"4h confirmation: {'yes' if htf_confirm else 'no'}, regime={regime}, score={score}.",
         f"MACD histogram moved from {prev['macd_hist']:.6f} to {latest['macd_hist']:.6f}.",
     ]
-    return MarketAnalysis(trend, breakout, overbought, oversold, regime, signal, score, support, resistance, stop_loss, take_profit, notes)
+    signal_explanation = " ".join(notes)
+    return MarketAnalysis(
+        trend,
+        breakout,
+        overbought,
+        oversold,
+        regime,
+        signal,
+        score,
+        support,
+        resistance,
+        stop_loss,
+        take_profit,
+        notes,
+        signal_explanation,
+    )

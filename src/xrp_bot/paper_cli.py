@@ -5,6 +5,23 @@ import json
 from pathlib import Path
 
 
+def handle_command(command: str, runtime, state, current_price: float, risk_status: str) -> str:
+    cmd = (command or "").strip().lower()
+    if cmd == "/pause":
+        runtime.active = False
+        return "Bot paused."
+    if cmd == "/resume":
+        runtime.active = True
+        return "Bot resumed."
+    if cmd == "/status":
+        return (
+            f"Status: {'active' if runtime.active else 'paused'} | "
+            f"Balance: {getattr(state, 'fake_balance', 0):.2f} | "
+            f"Price: {current_price:.6f} | Risk: {risk_status}"
+        )
+    return "Unknown command."
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Paper trading CLI placeholder (simulation-only).")
     parser.add_argument("--once", action="store_true")

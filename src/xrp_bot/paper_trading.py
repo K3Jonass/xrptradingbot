@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 
@@ -39,7 +40,7 @@ class PaperState:
 class PaperDecision:
     signal: str
     score: float
-    explanation: str
+    signal_explanation: str
     regime: str
     atr: float
     adx: float
@@ -49,6 +50,22 @@ class PaperDecision:
     take_profit: float
     higher_timeframe_confirmation: bool
 
+    @property
+    def explanation(self) -> str:
+        return self.signal_explanation
+
+
+@dataclass
+class TradeRecord:
+    entry_time: str
+    exit_time: str
+    entry_price: float
+    exit_price: float
+    size: float
+    pnl: float
+    duration_hours: float
+    reason: str = ""
+
 
 def load_state(path: Path | str = Path("data/paper_state.json"), initial_balance: float = 1000.0) -> PaperState:
     p = Path(path)
@@ -57,6 +74,7 @@ def load_state(path: Path | str = Path("data/paper_state.json"), initial_balance
     payload = json.loads(p.read_text())
     defaults = asdict(PaperState(fake_balance=initial_balance, day_start_balance=initial_balance, last_reset_date="1970-01-01"))
     defaults.update(payload)
+    defaults.pop("current_price", None)
     return PaperState(**defaults)
 
 
@@ -86,7 +104,7 @@ def evaluate_paper_signal(df: pd.DataFrame, interval: str, higher_tf_df: pd.Data
     return PaperDecision(
         signal=analysis.signal,
         score=float(analysis.score),
-        explanation=analysis.explanation,
+        signal_explanation=getattr(analysis, "signal_explanation", getattr(analysis, "explanation", "")),
         regime=analysis.regime,
         atr=atr,
         adx=float(last.get("adx_14", 0.0)),
@@ -99,10 +117,62 @@ def evaluate_paper_signal(df: pd.DataFrame, interval: str, higher_tf_df: pd.Data
 
 
 def normalize_event_payload(event: dict) -> dict:
+    explanation = (
+        event.get("signal_explanation")
+        or event.get("explanation")
+        or event.get("explanation_notes")
+        or ""
+    )
     return {
         "event_type": event.get("event_type", "paper_signal"),
         "signal_label": event.get("signal_label", event.get("signal", "HOLD")),
         "signal_score": float(event.get("signal_score", event.get("score", 0.0))),
-        "signal_explanation": event.get("signal_explanation", event.get("explanation", "")),
+        "signal_explanation": explanation,
         "market_regime": event.get("market_regime", event.get("regime", "unknown")),
     }
+
+
+def append_event_jsonl(path: Path | str, decision: PaperDecision, interval: str, event_type: str = "paper_signal") -> dict:
+    payload = normalize_event_payload({
+        "event_type": event_type,
+        "signal": decision.signal,
+        "score": decision.score,
+        "signal_explanation": decision.signal_explanation,
+        "regime": decision.regime,
+    })
+    payload.update({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "interval": interval,
+        "signal": decision.signal,
+        "atr": float(decision.atr),
+        "adx": float(decision.adx),
+        "support": float(decision.support),
+        "resistance": float(decision.resistance),
+        "stop_loss": float(decision.stop_loss),
+        "take_profit": float(decision.take_profit),
+        "higher_timeframe_confirmation": bool(decision.higher_timeframe_confirmation),
+        "market_regime": decision.regime,
+    })
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(payload) + "\n")
+    return payload
+
+
+def run_paper_cycle(
+    df: pd.DataFrame,
+    interval: str,
+    state: PaperState,
+    events_path: Path | str,
+    *,
+    higher_tf_df: pd.DataFrame | None = None,
+    close_trade: dict | None = None,
+) -> dict:
+    decision = evaluate_paper_signal(df, interval=interval, higher_tf_df=higher_tf_df)
+    event = append_event_jsonl(events_path, decision, interval=interval)
+    result = {"signal": decision.signal, "market_regime": decision.regime, "event": event, "journal_written": False}
+    if close_trade is not None:
+        append_journal_entry(close_trade)
+        result["journal_written"] = True
+    return result
