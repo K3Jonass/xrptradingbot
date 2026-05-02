@@ -34,3 +34,12 @@ analysis:
 network:
   timeout_seconds: 10
   retries: 3
+
+paper_trading:
+  initial_balance: 1000
+  max_risk_per_trade: 0.02
+  stop_loss_pct: 0.02
+  take_profit_pct: 0.04
+  max_daily_loss_pct: 0.05
+  max_trades_per_day: 5
+  max_open_position: 1
