@@ -6,8 +6,7 @@ import time
 from typing import Any
 
 import pandas as pd
-from binance.client import Client
-from binance.exceptions import BinanceAPIException, BinanceRequestException
+import requests
 
 from .config import NETWORK, SYMBOL
 
@@ -17,27 +16,30 @@ class DataFetchError(RuntimeError):
 
 
 class BinanceMarketDataFetcher:
+    BASE_URL = "https://api.binance.com"
+
     def __init__(self) -> None:
-        self.client = Client(request_params={"timeout": NETWORK["timeout_seconds"]})
+        self.timeout = NETWORK["timeout_seconds"]
 
     def fetch_klines(self, interval: str, limit: int, symbol: str = SYMBOL) -> pd.DataFrame:
         retries = NETWORK["retries"]
         last_exc: Exception | None = None
+        url = f"{self.BASE_URL}/api/v3/klines"
+        params = {"symbol": symbol, "interval": interval, "limit": limit}
         for attempt in range(1, retries + 1):
             try:
-                raw_klines: list[list[Any]] = self.client.get_klines(symbol=symbol, interval=interval, limit=limit)
-                return self._normalize_klines(raw_klines)
-            except BinanceAPIException as exc:
-                last_exc = exc
-                if exc.status_code == 429:
+                resp = requests.get(url, params=params, timeout=self.timeout)
+                if resp.status_code == 429:
                     time.sleep(min(attempt, 3))
                     continue
-                raise DataFetchError(f"Binance API error: {exc}") from exc
-            except (BinanceRequestException, TimeoutError) as exc:
+                resp.raise_for_status()
+                raw_klines: list[list[Any]] = resp.json()
+                return self._normalize_klines(raw_klines)
+            except (requests.RequestException, ValueError) as exc:
                 last_exc = exc
                 time.sleep(min(attempt, 3))
                 continue
-            except Exception as exc:
+            except Exception as exc:  # pragma: no cover
                 raise DataFetchError(f"Unexpected fetch error: {exc}") from exc
         raise DataFetchError(f"Failed after retries: {last_exc}")
 

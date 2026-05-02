@@ -10,7 +10,7 @@ import pandas as pd
 from .config import DATA_DIR, REPORT_FILE, SYMBOL
 
 
-def build_report_payload(interval: str, df: pd.DataFrame, analysis: dict) -> dict:
+def build_report_payload(interval: str, df: pd.DataFrame, analysis: dict, prediction_context: dict | None = None) -> dict:
     """Build a serializable analysis payload for console and file output."""
     latest = df.iloc[-1]
     return {
@@ -35,6 +35,7 @@ def build_report_payload(interval: str, df: pd.DataFrame, analysis: dict) -> dic
             "adx_14": float(latest["adx_14"]),
         },
         "market_conditions": analysis,
+        "prediction_context": prediction_context,
     }
 
 

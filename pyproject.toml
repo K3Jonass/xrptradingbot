@@ -10,12 +10,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "User" }]
 dependencies = [
-  "python-binance>=1.0.19",
   "pandas>=2.2.0",
   "numpy>=1.26.0",
   "PyYAML>=6.0.1",
   "requests>=2.31.0",
-  "streamlit>=1.44.0"
+  "streamlit>=1.44.0",
+  "scikit-learn>=1.4.0"
 ]
 
 [project.optional-dependencies]
@@ -34,6 +34,9 @@ xrp-research = "xrp_bot.research_cli:main"
 
 xrp-healthcheck = "xrp_bot.healthcheck_cli:main"
 xrp-research = "xrp_bot.research_cli:main"
+xrp-predict = "xrp_bot.predict_cli:main"
+xrp-dashboard = "xrp_bot.dashboard_cli:main"
+xrp-journal = "xrp_bot.journal_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
