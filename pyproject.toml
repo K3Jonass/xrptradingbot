@@ -33,10 +33,7 @@ xrp-dashboard = "xrp_bot.dashboard_cli:main"
 xrp-research = "xrp_bot.research_cli:main"
 
 xrp-healthcheck = "xrp_bot.healthcheck_cli:main"
-xrp-research = "xrp_bot.research_cli:main"
 xrp-predict = "xrp_bot.predict_cli:main"
-xrp-dashboard = "xrp_bot.dashboard_cli:main"
-xrp-journal = "xrp_bot.journal_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
