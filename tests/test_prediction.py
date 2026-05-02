@@ -3,6 +3,7 @@ from pathlib import Path
 
 from xrp_bot.data_fetcher import BinanceMarketDataFetcher
 from xrp_bot.indicators import add_indicators
+import xrp_bot.prediction as pred_mod
 from xrp_bot.prediction import add_labels, build_features, time_series_splits, train_and_predict
 
 
@@ -54,3 +55,46 @@ def test_prediction_output_shape():
     assert pred.model_name
     assert pred.model_version
     assert pred.feature_timestamp
+
+
+def test_safe_model_uses_logistic_without_multi_class(monkeypatch):
+    captured = {}
+
+    class DummyLogistic:
+        def __init__(self, **kwargs):
+            captured["kwargs"] = kwargs
+
+    monkeypatch.setattr(pred_mod, "LogisticRegression", DummyLogistic)
+    model, model_name = pred_mod._safe_model("logistic_regression")
+    assert isinstance(model, DummyLogistic)
+    assert model_name == "logistic_regression"
+    assert "multi_class" not in captured["kwargs"]
+
+
+def test_safe_model_constructor_fallbacks(monkeypatch):
+    class DummyRF:
+        def __init__(self, **kwargs):
+            if "n_estimators" in kwargs:
+                raise TypeError("unsupported")
+
+    class DummyGB:
+        def __init__(self, **kwargs):
+            if "random_state" in kwargs:
+                raise TypeError("unsupported")
+
+    class DummyLogistic:
+        def __init__(self, **kwargs):
+            if "max_iter" in kwargs:
+                raise TypeError("unsupported")
+
+    monkeypatch.setattr(pred_mod, "RandomForestClassifier", DummyRF)
+    monkeypatch.setattr(pred_mod, "GradientBoostingClassifier", DummyGB)
+    monkeypatch.setattr(pred_mod, "LogisticRegression", DummyLogistic)
+
+    rf_model, rf_name = pred_mod._safe_model("random_forest")
+    gb_model, gb_name = pred_mod._safe_model("gradient_boosting")
+    lr_model, lr_name = pred_mod._safe_model("logistic_regression")
+
+    assert isinstance(rf_model, DummyRF) and rf_name == "random_forest"
+    assert isinstance(gb_model, DummyGB) and gb_name == "gradient_boosting"
+    assert isinstance(lr_model, DummyLogistic) and lr_name == "logistic_regression"

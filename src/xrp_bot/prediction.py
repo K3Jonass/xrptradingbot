@@ -43,6 +43,30 @@ class _FallbackMajorityModel:
         return out
 
 
+def _safe_model(model_type: str):
+    if model_type == "random_forest" and RandomForestClassifier is not None:
+        try:
+            return RandomForestClassifier(n_estimators=150, random_state=42), "random_forest"
+        except TypeError:
+            return RandomForestClassifier(), "random_forest"
+
+    if model_type == "gradient_boosting" and GradientBoostingClassifier is not None:
+        try:
+            return GradientBoostingClassifier(random_state=42), "gradient_boosting"
+        except TypeError:
+            return GradientBoostingClassifier(), "gradient_boosting"
+
+    if LogisticRegression is not None:
+        # Avoid version-sensitive kwargs (e.g., multi_class) and gracefully
+        # degrade to a bare constructor on older/newer sklearn variants.
+        try:
+            return LogisticRegression(max_iter=1000), "logistic_regression"
+        except TypeError:
+            return LogisticRegression(), "logistic_regression"
+
+    return _FallbackMajorityModel(), "fallback_majority"
+
+
 def _market_regime(adx: float, ema_fast: float, ema_slow: float) -> int:
     if pd.isna(adx) or pd.isna(ema_fast) or pd.isna(ema_slow):
         return 0
@@ -139,16 +163,7 @@ def train_and_predict(df: pd.DataFrame) -> tuple[PredictionResult, dict[str, Any
     X = work[cols]
     y = work["direction_label"].map(label_map)
 
-    if model_type == "random_forest":
-        model = RandomForestClassifier(n_estimators=150, random_state=42)
-    elif model_type == "gradient_boosting" and GradientBoostingClassifier is not None:
-        model = GradientBoostingClassifier(random_state=42)
-    elif LogisticRegression is not None:
-        model = LogisticRegression(max_iter=1000, multi_class="auto")
-        model_type = "logistic_regression"
-    else:
-        model = _FallbackMajorityModel()
-        model_type = "fallback_majority"
+    model, model_type = _safe_model(model_type)
 
     splits = time_series_splits(len(work), n_splits=3)
     preds: list[int] = []
