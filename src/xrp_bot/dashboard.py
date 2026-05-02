@@ -92,8 +92,10 @@ def run_dashboard() -> None:
     trades = load_trades_jsonl()
     journal = load_journal_jsonl()
 
+    st.status("Dashboard loaded in read-only paper trading mode.", state="complete")
+
     if trades.empty:
-        st.warning("No trade data found. Expected data/paper_trades.jsonl")
+        st.info("No paper trading data yet. Run xrp-paper --once first.")
 
     if "timestamp" in trades.columns and not trades.empty:
         min_dt = trades["timestamp"].min().date()
@@ -158,3 +160,7 @@ def run_dashboard() -> None:
                     mistakes[m] = mistakes.get(m, 0) + 1
             if mistakes:
                 st.write("Repeated Mistakes", mistakes)
+
+
+if __name__ == "__main__":
+    run_dashboard()

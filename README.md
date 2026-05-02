@@ -9,7 +9,7 @@ pip install -e .
 
 ### Dashboard (read-only)
 - Preferred CLI: `xrp-dashboard`
-- Alternative launcher: `python -m streamlit run src/xrp_bot/dashboard.py`
+- Alternative launcher (direct app file): `python -m streamlit run src/xrp_bot/dashboard.py`
 
 Windows (PowerShell/CMD):
 - Activate venv: `.venv\\Scripts\\activate`
