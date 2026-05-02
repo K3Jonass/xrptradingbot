@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
+import json
 
+import numpy as np
 import pandas as pd
 
-from .signal_engine import stage3_analysis
+from .config import DATA_DIR, PAPER_TRADING_ONLY
+from .strategies import BaseStrategy, Stage3CompositeStrategy
 
 
 @dataclass
@@ -15,110 +18,127 @@ class BacktestConfig:
     max_risk_per_trade: float = 0.02
     atr_stop_loss_multiple: float = 1.5
     atr_take_profit_multiple: float = 3.0
-    rsi_buy_min: float = 50
-    rsi_buy_max: float = 70
+    adx_threshold: float = 20.0
+    ema_fast_period: int = 20
+    ema_slow_period: int = 50
+    rsi_buy_threshold: float = 35.0
+    rsi_sell_threshold: float = 65.0
     volume_breakout_threshold: float = 1.2
 
 
 @dataclass
-class Trade:
-    entry_time: str
-    exit_time: str
-    entry_price: float
-    exit_price: float
-    size: float
-    pnl: float
-    pnl_pct: float
-
-
-@dataclass
 class BacktestResult:
+    strategy: str
     initial_balance: float
     final_balance: float
-    total_trades: int
-    win_rate: float
     total_return_pct: float
     max_drawdown_pct: float
-    average_win: float
-    average_loss: float
+    sharpe_ratio: float
+    win_rate: float
     profit_factor: float
+    average_trade_duration_hours: float
+    number_of_trades: int
     trades: list[dict]
 
     def to_dict(self) -> dict:
         return asdict(self)
+    @property
+    def total_trades(self) -> int:
+        return self.number_of_trades
 
 
-def run_backtest(df: pd.DataFrame, cfg: BacktestConfig) -> BacktestResult:
+
+def run_backtest(df: pd.DataFrame, cfg: BacktestConfig, strategy: BaseStrategy | None = None) -> BacktestResult:
+    if not PAPER_TRADING_ONLY:
+        raise RuntimeError("Research mode requires PAPER_TRADING_ONLY=True")
+    strategy = strategy or Stage3CompositeStrategy()
     balance = cfg.initial_balance
-    peak_balance = balance
-    max_drawdown = 0.0
-    open_trade: dict | None = None
-    trades: list[Trade] = []
+    peak = balance
+    open_trade = None
+    equity_curve = [balance]
+    trades: list[dict] = []
 
-    for i in range(1, len(df)):
+    for i in range(30, len(df)):
         row = df.iloc[i]
+        w = df.iloc[: i + 1]
         if open_trade is None:
-            analysis = stage3_analysis(df.iloc[: i + 1], interval="1h")
-            long_signal = analysis.signal in {"BUY", "STRONG_BUY"}
-            if long_signal:
+            sig = strategy.generate_signal(w)
+            if sig.action == "BUY" and float(row.get("adx_14", 0.0)) >= cfg.adx_threshold:
                 entry = float(row["close"])
-                risk_amount = balance * cfg.max_risk_per_trade
                 atr = max(float(row.get("atr_14", 0.0)), 1e-9)
-                stop = entry - (cfg.atr_stop_loss_multiple * atr)
-                risk_per_unit = max(entry - stop, 1e-9)
-                size = risk_amount / risk_per_unit
+                risk_amount = balance * cfg.max_risk_per_trade
+                stop = entry - cfg.atr_stop_loss_multiple * atr
+                size = risk_amount / max(entry - stop, 1e-9)
                 open_trade = {
-                    "entry_price": entry,
-                    "entry_time": row["close_time"].isoformat(),
-                    "size": size,
-                    "stop": stop,
-                    "take": entry + (cfg.atr_take_profit_multiple * atr),
+                    "entry_time": row["close_time"], "entry_price": entry, "size": size,
+                    "stop": stop, "take": entry + cfg.atr_take_profit_multiple * atr,
                 }
         else:
-            low = float(row["low"])
-            high = float(row["high"])
-            exit_price = None
-            if low <= open_trade["stop"]:
-                exit_price = open_trade["stop"]
-            elif high >= open_trade["take"]:
-                exit_price = open_trade["take"]
-
+            low, high = float(row["low"]), float(row["high"])
+            exit_price = open_trade["stop"] if low <= open_trade["stop"] else open_trade["take"] if high >= open_trade["take"] else None
             if exit_price is not None:
                 pnl = (exit_price - open_trade["entry_price"]) * open_trade["size"]
                 balance += pnl
-                peak_balance = max(peak_balance, balance)
-                dd = (peak_balance - balance) / peak_balance if peak_balance > 0 else 0.0
-                max_drawdown = max(max_drawdown, dd)
-                trades.append(
-                    Trade(
-                        entry_time=open_trade["entry_time"],
-                        exit_time=row["close_time"].isoformat(),
-                        entry_price=open_trade["entry_price"],
-                        exit_price=exit_price,
-                        size=open_trade["size"],
-                        pnl=pnl,
-                        pnl_pct=(pnl / max(cfg.initial_balance, 1e-9)) * 100,
-                    )
-                )
+                dur = (row["close_time"] - open_trade["entry_time"]).total_seconds() / 3600
+                trades.append({"pnl": pnl, "duration_hours": dur})
                 open_trade = None
+        peak = max(peak, balance)
+        equity_curve.append(balance)
 
-    wins = [t.pnl for t in trades if t.pnl > 0]
-    losses = [t.pnl for t in trades if t.pnl < 0]
-    total_trades = len(trades)
-    win_rate = (len(wins) / total_trades * 100) if total_trades else 0.0
-    avg_win = sum(wins) / len(wins) if wins else 0.0
-    avg_loss = sum(losses) / len(losses) if losses else 0.0
-    profit_factor = (sum(wins) / abs(sum(losses))) if losses else float("inf") if wins else 0.0
+    return _metrics(cfg.initial_balance, balance, trades, equity_curve, strategy.name)
 
+
+def _metrics(initial: float, final: float, trades: list[dict], equity_curve: list[float], strategy: str) -> BacktestResult:
+    pnls = [t["pnl"] for t in trades]
+    wins = [x for x in pnls if x > 0]
+    losses = [x for x in pnls if x < 0]
+    rets = pd.Series(equity_curve).pct_change().fillna(0)
+    sharpe = float((rets.mean() / rets.std()) * np.sqrt(252)) if rets.std() > 0 else 0.0
+    dd = (pd.Series(equity_curve).cummax() - pd.Series(equity_curve)) / pd.Series(equity_curve).cummax()
+    avg_dur = float(np.mean([t["duration_hours"] for t in trades])) if trades else 0.0
     return BacktestResult(
-        initial_balance=cfg.initial_balance,
-        final_balance=balance,
-        total_trades=total_trades,
-        win_rate=win_rate,
-        total_return_pct=((balance - cfg.initial_balance) / cfg.initial_balance) * 100,
-        max_drawdown_pct=max_drawdown * 100,
-        average_win=avg_win,
-        average_loss=avg_loss,
-        profit_factor=profit_factor,
-        trades=[asdict(t) for t in trades],
+        strategy=strategy,
+        initial_balance=initial,
+        final_balance=final,
+        total_return_pct=((final - initial) / initial) * 100,
+        max_drawdown_pct=float(dd.max() * 100) if len(dd) else 0.0,
+        sharpe_ratio=sharpe,
+        win_rate=(len(wins) / len(pnls) * 100) if pnls else 0.0,
+        profit_factor=(sum(wins) / abs(sum(losses))) if losses else (float("inf") if wins else 0.0),
+        average_trade_duration_hours=avg_dur,
+        number_of_trades=len(trades),
+        trades=trades,
     )
+
+
+def batch_backtest(df: pd.DataFrame, cfg: BacktestConfig, strategies: list[BaseStrategy]) -> list[BacktestResult]:
+    results = [run_backtest(df, cfg, s) for s in strategies]
+    outdir = DATA_DIR / "backtests"
+    outdir.mkdir(parents=True, exist_ok=True)
+    (outdir / "batch_report.json").write_text(json.dumps([r.to_dict() for r in results], indent=2), encoding="utf-8")
+    return results
+
+
+def optimize_parameters(df: pd.DataFrame, cfg: BacktestConfig, strategies: list[BaseStrategy], grid: list[dict]) -> dict:
+    best = {"score": float("-inf")}
+    for params in grid:
+        c = BacktestConfig(**{**asdict(cfg), **{k: v for k, v in params.items() if hasattr(cfg, k)}})
+        res = batch_backtest(df, c, strategies)
+        score = max(r.total_return_pct for r in res)
+        if score > best["score"]:
+            best = {"score": score, "params": params}
+    return best
+
+
+def walk_forward_validation(df: pd.DataFrame, cfg: BacktestConfig, strategy: BaseStrategy, train_size: int, test_size: int) -> list[dict]:
+    windows = []
+    start = 0
+    while start + train_size + test_size <= len(df):
+        train = df.iloc[start:start + train_size]
+        test = df.iloc[start + train_size:start + train_size + test_size]
+        # strategy is rule-based; "train" reserved for optimization workflows
+        _ = train
+        r = run_backtest(test, cfg, strategy)
+        windows.append({"start": start, "train": train_size, "test": test_size, "return": r.total_return_pct})
+        start += test_size
+    return windows
