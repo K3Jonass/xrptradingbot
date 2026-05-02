@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 try:
@@ -46,3 +47,24 @@ def test_xrp_dashboard_script_target_is_valid():
     module = importlib.import_module(module_name)
 
     assert hasattr(module, func_name)
+
+
+def test_xrp_dashboard_cli_runs_dashboard_py(monkeypatch):
+    monkeypatch.syspath_prepend("src")
+    mod = importlib.import_module("xrp_bot.dashboard_cli")
+
+    calls = {}
+
+    def fake_streamlit_main():
+        calls["argv"] = list(sys.argv)
+        return 0
+
+    monkeypatch.setitem(sys.modules, "streamlit.web.cli", SimpleNamespace(main=fake_streamlit_main))
+
+    try:
+        mod.main()
+    except SystemExit:
+        pass
+
+    assert calls["argv"][0:2] == ["streamlit", "run"]
+    assert calls["argv"][2].endswith("src/xrp_bot/dashboard.py")

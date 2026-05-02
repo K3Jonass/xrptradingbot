@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from pathlib import Path
 
 from xrp_bot.dashboard import calculate_dashboard_metrics, load_paper_state, load_trades_jsonl
@@ -36,3 +37,50 @@ def test_calculate_dashboard_metrics():
     assert metrics["best_trade"] == 100.0
     assert metrics["worst_trade"] == -20.0
     assert metrics["win_rate"] > 0
+
+
+def test_dashboard_has_executable_entrypoint():
+    content = Path("src/xrp_bot/dashboard.py").read_text(encoding="utf-8")
+    assert 'if __name__ == "__main__":' in content
+    assert "run_dashboard()" in content
+
+
+def test_dashboard_shows_fallback_message_when_data_missing(monkeypatch):
+    import xrp_bot.dashboard as dashboard
+
+    calls = {"title": [], "info": []}
+
+    class _DummySidebar:
+        def date_input(self, *args, **kwargs):
+            return kwargs.get("value")
+
+        def multiselect(self, *args, **kwargs):
+            return kwargs.get("default", [])
+
+    st = SimpleNamespace(
+        set_page_config=lambda **kwargs: None,
+        title=lambda msg: calls["title"].append(msg),
+        status=lambda *args, **kwargs: None,
+        info=lambda msg: calls["info"].append(msg),
+        warning=lambda msg: None,
+        sidebar=_DummySidebar(),
+        columns=lambda n: [SimpleNamespace(metric=lambda *a, **k: None) for _ in range(n)],
+        subheader=lambda *a, **k: None,
+        line_chart=lambda *a, **k: None,
+        bar_chart=lambda *a, **k: None,
+        area_chart=lambda *a, **k: None,
+        json=lambda *a, **k: None,
+        metric=lambda *a, **k: None,
+        write=lambda *a, **k: None,
+    )
+
+    monkeypatch.setitem(__import__("sys").modules, "streamlit", st)
+    monkeypatch.setattr(dashboard, "load_paper_state", lambda: {"fake_balance": 0.0, "realized_pnl": 0.0, "unrealized_pnl": 0.0})
+    monkeypatch.setattr(dashboard, "load_trades_jsonl", lambda: __import__("pandas").DataFrame())
+    monkeypatch.setattr(dashboard, "load_journal_jsonl", lambda: __import__("pandas").DataFrame())
+    monkeypatch.setattr(dashboard, "load_prediction_report", lambda: None)
+
+    dashboard.run_dashboard()
+
+    assert calls["title"]
+    assert "No paper trading data yet. Run xrp-paper --once first." in calls["info"]
