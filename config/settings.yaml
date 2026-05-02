@@ -1,0 +1,36 @@
+app:
+  symbol: XRPUSDT
+  allowed_symbols:
+    - XRPUSDT
+  supported_intervals:
+    - 1m
+    - 5m
+    - 15m
+    - 1h
+    - 4h
+  default_interval: 15m
+  candle_limit:
+    default: 500
+    min: 60
+    max: 1000
+
+indicator_settings:
+  ema_fast: 20
+  ema_slow: 50
+  rsi_period: 14
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  bollinger_period: 20
+  bollinger_std_dev: 2
+  volume_ma_period: 20
+
+analysis:
+  trend_rsi_midpoint: 50
+  overbought_rsi: 70
+  oversold_rsi: 30
+  volume_breakout_threshold: 1.5
+
+network:
+  timeout_seconds: 10
+  retries: 3
