@@ -18,6 +18,8 @@ def test_report_payload_keys():
         "bb_lower": 1.8,
         "volume": 200,
         "volume_ma_20": 150,
+        "atr_14": 0.03,
+        "adx_14": 27,
     }])
     rpt = build_report_payload("1h", df, {"trend": "bullish trend"})
     assert rpt["interval"] == "1h"

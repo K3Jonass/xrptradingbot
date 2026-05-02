@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 
-from .analyzer import detect_market_conditions
+from .signal_engine import stage3_analysis
 from .config import ALLOWED_SYMBOLS, DEFAULT_INTERVAL, DEFAULT_LIMIT, MAX_LIMIT, MIN_LIMIT, SUPPORTED_INTERVALS
 from .data_fetcher import BinanceMarketDataFetcher, DataFetchError
 from .indicators import add_indicators
@@ -36,9 +36,12 @@ def main() -> None:
     logger = setup_logger()
     try:
         validate_inputs(args.symbol, args.interval, args.limit)
-        df = BinanceMarketDataFetcher().fetch_klines(args.interval, args.limit, symbol=args.symbol)
-        df = add_indicators(df)
-        report = build_report_payload(args.interval, df, detect_market_conditions(df).to_dict())
+        fetcher = BinanceMarketDataFetcher()
+        df = add_indicators(fetcher.fetch_klines(args.interval, args.limit, symbol=args.symbol))
+        higher_tf_df = None
+        if args.interval in {"15m", "1h"}:
+            higher_tf_df = add_indicators(fetcher.fetch_klines("4h", min(args.limit, 300), symbol=args.symbol))
+        report = build_report_payload(args.interval, df, stage3_analysis(df, interval=args.interval, higher_tf_df=higher_tf_df).to_dict())
         if args.output == "json":
             print(json.dumps(report, indent=2))
         else:

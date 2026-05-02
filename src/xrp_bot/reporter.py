@@ -31,6 +31,8 @@ def build_report_payload(interval: str, df: pd.DataFrame, analysis: dict) -> dic
             "bb_lower": float(latest["bb_lower"]),
             "volume": float(latest["volume"]),
             "volume_ma_20": float(latest["volume_ma_20"]),
+            "atr_14": float(latest["atr_14"]),
+            "adx_14": float(latest["adx_14"]),
         },
         "market_conditions": analysis,
     }
@@ -58,10 +60,16 @@ def print_report(report: dict) -> None:
         f"- Bollinger:     upper={ind['bb_upper']:.6f}, "
         f"mid={ind['bb_mid']:.6f}, lower={ind['bb_lower']:.6f}"
     )
-    print(f"- Volume/MA20:   {ind['volume']:.2f} / {ind['volume_ma_20']:.2f}\n")
+    print(f"- Volume/MA20:   {ind['volume']:.2f} / {ind['volume_ma_20']:.2f}")
+    print(f"- ATR(14):       {ind['atr_14']:.6f}")
+    print(f"- ADX(14):       {ind['adx_14']:.2f}\n")
 
     print("Conditions")
     print(f"- Trend:               {cond['trend']}")
+    print(f"- Regime:              {cond['regime']}")
+    print(f"- Signal:              {cond['signal']} (score={cond['score']})")
+    print(f"- Support/Resistance:  {cond['support']:.6f} / {cond['resistance']:.6f}")
+    print(f"- ATR SL/TP:           {cond['stop_loss']:.6f} / {cond['take_profit']:.6f}")
     print(f"- High volume breakout:{' yes' if cond['breakout'] else ' no'}")
     print(f"- Overbought:          {'yes' if cond['overbought'] else 'no'}")
     print(f"- Oversold:            {'yes' if cond['oversold'] else 'no'}")

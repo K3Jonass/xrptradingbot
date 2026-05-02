@@ -26,6 +26,7 @@ dev = [
 [project.scripts]
 xrp-analyze = "xrp_bot.cli:main"
 xrp-backtest = "xrp_bot.backtest_cli:main"
+xrp-paper = "xrp_bot.paper_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
