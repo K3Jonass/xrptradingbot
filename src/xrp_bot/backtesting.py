@@ -6,13 +6,15 @@ from dataclasses import dataclass, asdict
 
 import pandas as pd
 
+from .signal_engine import stage3_analysis
+
 
 @dataclass
 class BacktestConfig:
     initial_balance: float = 1000.0
     max_risk_per_trade: float = 0.02
-    stop_loss_pct: float = 0.02
-    take_profit_pct: float = 0.04
+    atr_stop_loss_multiple: float = 1.5
+    atr_take_profit_multiple: float = 3.0
     rsi_buy_min: float = 50
     rsi_buy_max: float = 70
     volume_breakout_threshold: float = 1.2
@@ -56,15 +58,13 @@ def run_backtest(df: pd.DataFrame, cfg: BacktestConfig) -> BacktestResult:
     for i in range(1, len(df)):
         row = df.iloc[i]
         if open_trade is None:
-            long_signal = (
-                row["ema_20"] > row["ema_50"]
-                and cfg.rsi_buy_min <= row["rsi_14"] <= cfg.rsi_buy_max
-                and row["volume"] > (cfg.volume_breakout_threshold * row["volume_ma_20"])
-            )
+            analysis = stage3_analysis(df.iloc[: i + 1], interval="1h")
+            long_signal = analysis.signal in {"BUY", "STRONG_BUY"}
             if long_signal:
                 entry = float(row["close"])
                 risk_amount = balance * cfg.max_risk_per_trade
-                stop = entry * (1 - cfg.stop_loss_pct)
+                atr = max(float(row.get("atr_14", 0.0)), 1e-9)
+                stop = entry - (cfg.atr_stop_loss_multiple * atr)
                 risk_per_unit = max(entry - stop, 1e-9)
                 size = risk_amount / risk_per_unit
                 open_trade = {
@@ -72,7 +72,7 @@ def run_backtest(df: pd.DataFrame, cfg: BacktestConfig) -> BacktestResult:
                     "entry_time": row["close_time"].isoformat(),
                     "size": size,
                     "stop": stop,
-                    "take": entry * (1 + cfg.take_profit_pct),
+                    "take": entry + (cfg.atr_take_profit_multiple * atr),
                 }
         else:
             low = float(row["low"])

@@ -1,11 +1,4 @@
-# XRP Trading Bot - Stage 4 (Paper Trading Monitoring + Telegram Control)
 
-This project remains simulation-only:
-- Uses Binance **public market data only**.
-- Uses **no private API keys**.
-- Places **no real orders**.
-- Performs **no market/limit execution**.
-- Telegram integration is **alerts + paper-control only** (no buy/sell execution commands).
 
 ## Install (pip)
 
@@ -37,12 +30,7 @@ xrp-backtest --fixture tests/fixtures/xrpusdt_1h_sample.json
 
 ### Live paper trading simulator (simulation-only)
 ```bash
-xrp-paper --symbol XRPUSDT --interval 1h --balance 1000 --once
-xrp-paper --loop --sleep-seconds 60
-xrp-paper --reset-state --once
-xrp-paper --command /status --once
-xrp-healthcheck
-```
+
 
 Options:
 - `--symbol` (default: `XRPUSDT`)
@@ -143,37 +131,4 @@ python -m compileall src
 PYTHONPATH=src pytest -q
 ```
 
-### Local test run (full)
-```bash
-pip install -r requirements-dev.txt
-python -m compileall src tests
-PYTHONPATH=src python scripts/smoke_test.py
-PYTHONPATH=src pytest -q
-```
 
-### Docker test run
-```bash
-docker compose run --rm test
-```
-
-### CI test flow
-GitHub Actions workflow `.github/workflows/tests.yml` runs on push/PR with Python 3.11 and executes:
-1. `pip install -r requirements-dev.txt`
-2. `python -m compileall src tests`
-3. `PYTHONPATH=src python scripts/smoke_test.py`
-4. `PYTHONPATH=src pytest -q`
-
-
-## Stage 2 Safety Guards
-- Global guard: `PAPER_TRADING_ONLY = True`.
-- Any attempt to use private endpoints or order placement functions is blocked by `xrp_bot.safety`.
-- Loading Binance private API keys is blocked.
-
-## Paper Trading Logs
-- Event log file: `logs/paper_trader.log`
-- Structured events: `data/paper_trades.jsonl`
-
-Each paper event includes: timestamp, symbol, interval, event type (`OPEN`/`CLOSE`/`SKIP`), signal, price, quantity, fake balance, realized PnL, reason.
-
-## Paper Risk Config
-Paper trading risk defaults now come from `config/settings.yaml` under `paper_trading:`.

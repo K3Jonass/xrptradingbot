@@ -14,8 +14,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--fixture", default="tests/fixtures/xrpusdt_1h_sample.json")
     p.add_argument("--initial-balance", type=float, default=1000)
     p.add_argument("--max-risk", type=float, default=0.02)
-    p.add_argument("--stop-loss", type=float, default=0.02)
-    p.add_argument("--take-profit", type=float, default=0.04)
+    p.add_argument("--stop-loss", type=float, default=1.5)
+    p.add_argument("--take-profit", type=float, default=3.0)
     return p.parse_args()
 
 
@@ -27,8 +27,8 @@ def main() -> None:
     cfg = BacktestConfig(
         initial_balance=args.initial_balance,
         max_risk_per_trade=args.max_risk,
-        stop_loss_pct=args.stop_loss,
-        take_profit_pct=args.take_profit,
+        atr_stop_loss_multiple=args.stop_loss,
+        atr_take_profit_multiple=args.take_profit,
     )
     result = run_backtest(df, cfg).to_dict()
     print(json.dumps(result, indent=2))
