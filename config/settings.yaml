@@ -58,3 +58,9 @@ telegram:
   bot_token: ""
   chat_id: ""
   base_url: "https://api.telegram.org"
+
+prediction:
+  label_horizon: 4
+  flat_threshold: 0.001
+  model_type: logistic_regression
+  min_confidence_threshold: 0.55

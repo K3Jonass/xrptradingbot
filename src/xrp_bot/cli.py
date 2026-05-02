@@ -10,6 +10,7 @@ from .data_fetcher import BinanceMarketDataFetcher, DataFetchError
 from .indicators import add_indicators
 from .logger import setup_logger
 from .reporter import build_report_payload, print_report, save_report
+from .prediction import train_and_predict
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,6 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
     parser.add_argument("--no-save", action="store_true", help="Do not write output files.")
     parser.add_argument("--output", choices=["text", "json"], default="text")
+    parser.add_argument("--include-prediction", action="store_true")
     return parser.parse_args()
 
 
@@ -41,7 +43,11 @@ def main() -> None:
         higher_tf_df = None
         if args.interval in {"15m", "1h"}:
             higher_tf_df = add_indicators(fetcher.fetch_klines("4h", min(args.limit, 300), symbol=args.symbol))
-        report = build_report_payload(args.interval, df, stage3_analysis(df, interval=args.interval, higher_tf_df=higher_tf_df).to_dict())
+        prediction_context = None
+        if args.include_prediction:
+            pred, _ = train_and_predict(df)
+            prediction_context = pred.__dict__ | {"advisory_only": True, "paper_trading_only": True}
+        report = build_report_payload(args.interval, df, stage3_analysis(df, interval=args.interval, higher_tf_df=higher_tf_df).to_dict(), prediction_context=prediction_context)
         if args.output == "json":
             print(json.dumps(report, indent=2))
         else:

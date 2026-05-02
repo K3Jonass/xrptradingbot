@@ -4,4 +4,4 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN pip install --no-cache-dir -e .
-CMD ["xrp-paper", "--loop", "--sleep-seconds", "60"]
+CMD ["xrp-analyze", "--interval", "1h", "--limit", "200"]

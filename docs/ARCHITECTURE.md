@@ -1,20 +1,22 @@
 # Architecture Overview
 
 ## Unified signal path
-- `signal_engine.stage3_analysis()` is the single source for Stage 3 scoring.
-- Analyzer, paper signal evaluation, and Stage3 composite strategy all consume this path.
+- `signal_engine.stage3_analysis()` remains the single source for Stage 3 scoring.
+- Analyzer, paper signal evaluation, and Stage3 composite strategy consume this path.
 
-## Strategy layer
-- `BaseStrategy` defines `generate_signal(df)`.
-- Implementations: Stage3 composite, EMA crossover, RSI mean reversion, breakout+volume.
+## Prediction research layer (Stage 8)
+- New module: `xrp_bot.prediction`.
+- Ingests indicator-enriched candle data and performs feature engineering + labeling.
+- Supports baseline classification models (`logistic_regression`, `random_forest`, `gradient_boosting`).
+- Uses ordered time-series splits only.
+- Writes report artifact to `data/models/model_report.json`.
+- Produces advisory prediction payload (`direction`, `confidence`, model metadata, feature timestamp).
 
-## Backtesting/research
-- `run_backtest()` executes a strategy with shared risk model.
-- `batch_backtest()`, `optimize_parameters()`, and `walk_forward_validation()` support research workflows.
+## Safety boundary
+- Prediction layer is **not** wired to order execution.
+- Prediction data can be used as analysis context only in research/paper mode.
+- No private Binance APIs or live trading routes.
 
-## Paper event schema
-- `append_event_jsonl()` writes unified keys.
-- `normalize_event_payload()` adapts legacy event records.
-
-## Safety
-- Paper-only guards are enforced; no live execution code exists.
+## Stage 8.1 Integration
+- Optional prediction context can be attached to analyzer and paper reports.
+- Dashboard can load model report artifact in a read-only advisory section.

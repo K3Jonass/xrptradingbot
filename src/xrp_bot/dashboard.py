@@ -11,6 +11,13 @@ STATE_FILE = Path("data/paper_state.json")
 TRADES_FILE = Path("data/paper_trades.jsonl")
 
 
+def load_prediction_report(path: Path | str = Path("data/models/model_report.json")) -> dict | None:
+    p = Path(path)
+    if not p.exists():
+        return None
+    return json.loads(p.read_text())
+
+
 def load_paper_state(path: Path | str = STATE_FILE) -> dict:
     p = Path(path)
     if not p.exists():
@@ -94,6 +101,7 @@ def run_dashboard() -> None:
         trades = trades[trades["market_regime"].isin(chosen_regimes)] if chosen_regimes else trades
 
     metrics = calculate_dashboard_metrics(state, trades)
+    prediction_report = load_prediction_report()
     cols = st.columns(3)
     for idx, (k, v) in enumerate(metrics.items()):
         cols[idx % 3].metric(k.replace("_", " ").title(), f"{v:.2f}" if isinstance(v, float) else v)
@@ -112,6 +120,10 @@ def run_dashboard() -> None:
 
         st.subheader("Trade PnL Distribution")
         st.bar_chart(curve["pnl"])
+
+    if prediction_report:
+        st.subheader("Prediction Research (Advisory Only)")
+        st.json({"model": prediction_report.get("model"), "version": prediction_report.get("version"), "metrics": prediction_report.get("metrics", {})})
 
     if not trades.empty and "signal_score" in trades.columns and "timestamp" in trades.columns:
         st.subheader("Signal Score Over Time")
