@@ -31,7 +31,6 @@ xrp-backtest --fixture tests/fixtures/xrpusdt_1h_sample.json
 ### Live paper trading simulator (simulation-only)
 ```bash
 
-```
 
 Options:
 - `--symbol` (default: `XRPUSDT`)
@@ -41,6 +40,60 @@ Options:
 - `--loop` run continuously
 - `--sleep-seconds` loop delay
 - `--reset-state` clear local paper state file before running
+- `--command` issue a paper-only control command: `/status`, `/summary`, `/risk`, `/pause`, `/resume`, `/resetpaper`
+
+## Telegram monitoring (alerts only)
+Configure `config/settings.yaml`:
+- `telegram.enabled`
+- `telegram.bot_token`
+- `telegram.chat_id`
+
+Secrets are loaded from `.env`:
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+
+Use `.env.example` as a template.
+
+## Deployment
+
+### Local run
+```bash
+cp .env.example .env
+xrp-healthcheck
+xrp-paper --loop --sleep-seconds 60
+```
+
+### Docker run
+```bash
+docker build -t xrp-paper .
+docker run --env-file .env -v $(pwd)/data:/app/data -v $(pwd)/logs:/app/logs xrp-paper
+```
+
+### Docker Compose
+```bash
+docker compose up -d xrp-paper
+docker compose run --rm xrp-healthcheck
+```
+
+### systemd VPS run
+```bash
+sudo cp deploy/xrp-paper.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now xrp-paper
+```
+
+Alert types:
+- analysis alerts
+- paper trade open/close alerts
+- risk warnings
+- daily summary via `/summary`
+- system error alerts
+
+Forbidden / not implemented:
+- no `/buy` command
+- no `/sell` command
+- no live order execution
+- no private Binance API actions
 
 ## Paper state persistence
 Paper trading state is stored in:
@@ -77,4 +130,5 @@ Each run shows:
 python -m compileall src
 PYTHONPATH=src pytest -q
 ```
+
 
