@@ -9,6 +9,7 @@ import streamlit as st
 
 STATE_FILE = Path("data/paper_state.json")
 TRADES_FILE = Path("data/paper_trades.jsonl")
+JOURNAL_FILE = Path("data/trade_journal.jsonl")
 
 
 def load_paper_state(path: Path | str = STATE_FILE) -> dict:
@@ -32,6 +33,15 @@ def load_trades_jsonl(path: Path | str = TRADES_FILE) -> pd.DataFrame:
         df["timestamp"] = pd.to_datetime(df["exit_time"], utc=True, errors="coerce")
     return df
 
+
+
+
+def load_journal_jsonl(path: Path | str = JOURNAL_FILE) -> pd.DataFrame:
+    p = Path(path)
+    if not p.exists():
+        return pd.DataFrame()
+    rows = [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+    return pd.DataFrame(rows)
 
 def calculate_dashboard_metrics(state: dict, trades_df: pd.DataFrame) -> dict:
     if "pnl" in trades_df.columns:
@@ -72,6 +82,7 @@ def run_dashboard() -> None:
 
     state = load_paper_state()
     trades = load_trades_jsonl()
+    journal = load_journal_jsonl()
 
     if trades.empty:
         st.warning("No trade data found. Expected data/paper_trades.jsonl")
@@ -121,3 +132,16 @@ def run_dashboard() -> None:
         st.subheader("Market Regime Over Time")
         regime_counts = trades.groupby([trades["timestamp"].dt.date, "market_regime"]).size().unstack(fill_value=0)
         st.area_chart(regime_counts)
+
+    if not journal.empty:
+        st.subheader("Trading Journal Intelligence (Read-only)")
+        if "decision_score" in journal.columns:
+            st.metric("Average Decision Score", f"{journal['decision_score'].mean():.2f}")
+            st.bar_chart(journal["decision_score"])
+        if "mistakes" in journal.columns:
+            mistakes = {}
+            for arr in journal["mistakes"].dropna().tolist():
+                for m in arr:
+                    mistakes[m] = mistakes.get(m, 0) + 1
+            if mistakes:
+                st.write("Repeated Mistakes", mistakes)

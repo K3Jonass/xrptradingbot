@@ -1,54 +1,28 @@
 ## Install (pip)
 
-### Option A: requirements files
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### Option B: editable package install
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
 ```
 
-## Commands
+## Commands audit (Stage 7.1)
+- `xrp-analyze`: public data market analyzer.
+- `xrp-backtest`: offline simulation backtest.
+- `xrp-paper`: paper trading simulator only.
+- `xrp-dashboard`: read-only dashboard.
+- `xrp-healthcheck`: safety/runtime check.
+- `xrp-research`: analyzer alias for research workflows.
+- `xrp-journal`: weekly decision-intelligence summary.
 
-### Market analyzer
-```bash
-xrp-analyze --symbol XRPUSDT --interval 1h --limit 300
-```
+## Stage 7 journal intelligence
+- Closed paper trades write events to `data/paper_trades.jsonl` and journal records to `data/trade_journal.jsonl`.
+- Journal supports post-trade analysis, decision scoring, repeated-mistake detection, and weekly summary generation.
+- Dashboard reads `paper_state.json`, `paper_trades.jsonl`, and `trade_journal.jsonl` for read-only analytics.
+- Telegram weekly summary formatting uses journal weekly summary payload.
 
-### Offline backtest (simulation-only)
-```bash
-xrp-backtest --fixture tests/fixtures/xrpusdt_1h_sample.json
-```
-
-### Live paper trading simulator (simulation-only)
-```bash
-
-
-The dashboard reads local artifacts only:
-- `data/paper_state.json`
-- `data/paper_trades.jsonl`
-- `logs/paper_trader.log` (optional for future extensions)
-
-Dashboard features:
-- metrics: balance, realized/unrealized PnL, total trades, win rate, max drawdown, profit factor, best/worst trade
-- charts: equity curve, daily PnL, trade PnL distribution, signal score over time, market regime over time
-- filters: date range, signal type, market regime
-
-Safety constraints:
-- `PAPER_TRADING_ONLY = True`
-- no Binance private API use
-- no live order execution
-- dashboard is read-only
-
-## Run tests
-```bash
-python -m compileall src
-PYTHONPATH=src pytest -q
-```
-
+## Safety constraints
+- `PAPER_TRADING_ONLY = True`.
+- No private Binance API.
+- No order execution.
+- Journal is analysis-only/review-only.

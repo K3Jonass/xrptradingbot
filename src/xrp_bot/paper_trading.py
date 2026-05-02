@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import pandas as pd
 from .signal_engine import stage3_analysis
+from .journal import append_journal_entry
 
 @dataclass
 class PaperTradeConfig:
@@ -73,8 +74,9 @@ def append_event_jsonl(path: Path | str, decision: PaperDecision, interval: str)
     payload = {"interval": interval, "signal": decision.signal, "signal_score": decision.score, "signal_explanation": decision.explanation, "market_regime": decision.regime, "atr": decision.atr, "adx": decision.adx, "support": decision.support, "resistance": decision.resistance, "stop_loss": decision.stop_loss, "take_profit": decision.take_profit, "higher_timeframe_confirmation": decision.higher_timeframe_confirmation}
     with p.open("a", encoding="utf-8") as f: f.write(json.dumps(payload)+"\n")
 
-def run_paper_cycle(df: pd.DataFrame, interval: str, state: PaperState, event_path: Path | str) -> dict:
+def run_paper_cycle(df: pd.DataFrame, interval: str, state: PaperState, event_path: Path | str, close_trade: dict | None = None) -> dict:
     decision = evaluate_paper_signal(df, interval=interval)
     state.trade_count += 1
     append_event_jsonl(event_path, decision, interval)
-    return {"signal": decision.signal, "market_regime": decision.regime, "signal_score": decision.score}
+    journal_entry = append_journal_entry(close_trade) if close_trade else None
+    return {"signal": decision.signal, "market_regime": decision.regime, "signal_score": decision.score, "journal_written": bool(journal_entry)}
