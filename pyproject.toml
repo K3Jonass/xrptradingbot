@@ -14,7 +14,8 @@ dependencies = [
   "pandas>=2.2.0",
   "numpy>=1.26.0",
   "PyYAML>=6.0.1",
-  "requests>=2.31.0"
+  "requests>=2.31.0",
+  "streamlit>=1.44.0"
 ]
 
 [project.optional-dependencies]
@@ -27,6 +28,7 @@ dev = [
 xrp-analyze = "xrp_bot.cli:main"
 xrp-backtest = "xrp_bot.backtest_cli:main"
 xrp-paper = "xrp_bot.paper_cli:main"
+
 xrp-healthcheck = "xrp_bot.healthcheck_cli:main"
 xrp-research = "xrp_bot.research_cli:main"
 
