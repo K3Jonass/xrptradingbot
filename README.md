@@ -132,3 +132,28 @@ PYTHONPATH=src pytest -q
 ```
 
 
+
+## Strategy research lab (paper-only)
+Run multi-strategy simulation, optimization, and walk-forward validation:
+```bash
+xrp-research --fixture tests/fixtures/xrpusdt_1h_sample.json
+```
+
+Included strategies:
+- `Stage3CompositeStrategy`
+- EMA crossover
+- RSI mean reversion
+- Breakout + volume confirmation
+
+Outputs are saved under `data/backtests/`.
+
+Safety guarantees:
+- `PAPER_TRADING_ONLY = True`
+- no real trading
+- no private Binance API keys
+- no order execution
+
+## Stage 6.1 conflict resolution
+- Unified Stage 3 signal flow through `signal_engine.stage3_analysis`.
+- Standardized paper event schema with backward compatibility normalization for legacy JSONL records.
+- Added architecture and safety audit docs: `docs/ARCHITECTURE.md`, `SAFETY_AUDIT.md`.

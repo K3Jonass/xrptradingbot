@@ -28,6 +28,7 @@ xrp-analyze = "xrp_bot.cli:main"
 xrp-backtest = "xrp_bot.backtest_cli:main"
 xrp-paper = "xrp_bot.paper_cli:main"
 xrp-healthcheck = "xrp_bot.healthcheck_cli:main"
+xrp-research = "xrp_bot.research_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
