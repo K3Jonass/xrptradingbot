@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xrp-market-analyzer"
+version = "0.2.1"
+description = "Stage 1 XRP/USDT market analyzer using Binance public data"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "User" }]
+dependencies = [
+  "python-binance>=1.0.19",
+  "pandas>=2.2.0",
+  "numpy>=1.26.0",
+  "PyYAML>=6.0.1",
+  "requests>=2.31.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "ruff>=0.5.0"
+]
+
+[project.scripts]
+xrp-analyze = "xrp_bot.cli:main"
+xrp-backtest = "xrp_bot.backtest_cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
