@@ -83,4 +83,63 @@ def test_dashboard_shows_fallback_message_when_data_missing(monkeypatch):
     dashboard.run_dashboard()
 
     assert calls["title"]
-    assert "No paper trading data yet. Run xrp-paper --once first." in calls["info"]
+    assert "No trades yet, but paper cycles are being recorded." in calls["info"]
+
+
+
+def test_skip_only_metrics_are_visible():
+    import pandas as pd
+    from xrp_bot.dashboard import build_paper_event_counters
+
+    events = pd.DataFrame([
+        {"event_type": "SKIP", "signal_label": "SELL"},
+        {"event_type": "SKIP", "signal_label": "BUY"},
+    ])
+    counters = build_paper_event_counters(events)
+    assert counters["total_cycles"] == 2
+    assert counters["skip_count"] == 2
+    assert counters["open_count"] == 0
+    assert counters["hold_count"] == 0
+
+
+def test_recent_events_table_columns_load_from_jsonl(tmp_path: Path):
+    p = tmp_path / "paper_trades.jsonl"
+    p.write_text("\n".join([
+        json.dumps({
+            "timestamp": "2026-01-01T00:00:00Z",
+            "event_type": "SKIP",
+            "signal_label": "BUY",
+            "signal_score": 0.72,
+            "signal_explanation": "Momentum weak",
+            "market_regime": "RANGE",
+            "current_price": 0.54,
+            "reason": "risk filter",
+            "fake_balance": 1000.0,
+            "realized_pnl": 0.0,
+            "unrealized_pnl": 0.0,
+        })
+    ]))
+    df = load_trades_jsonl(p)
+    for col in ["event_type", "signal_label", "signal_score", "signal_explanation", "market_regime", "current_price", "reason", "fake_balance", "realized_pnl", "unrealized_pnl"]:
+        assert col in df.columns
+
+
+def test_event_counters_cover_open_close_hold_and_signal_buckets():
+    import pandas as pd
+    from xrp_bot.dashboard import build_paper_event_counters
+
+    events = pd.DataFrame([
+        {"event_type": "OPEN", "signal_label": "BUY"},
+        {"event_type": "CLOSE", "signal_label": "SELL"},
+        {"event_type": "HOLD", "signal_label": "STRONG_BUY"},
+        {"event_type": "SKIP", "signal_label": "STRONG_SELL"},
+    ])
+    counters = build_paper_event_counters(events)
+    assert counters["open_count"] == 1
+    assert counters["close_count"] == 1
+    assert counters["hold_count"] == 1
+    assert counters["skip_count"] == 1
+    assert counters["buy_count"] == 1
+    assert counters["sell_count"] == 1
+    assert counters["strong_buy_count"] == 1
+    assert counters["strong_sell_count"] == 1

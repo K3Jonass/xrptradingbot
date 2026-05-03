@@ -30,6 +30,12 @@ Windows (PowerShell/CMD):
 - The cycle always persists files:
   - `data/paper_state.json`
   - `data/paper_trades.jsonl`
+- Dashboard visibility for overnight runs:
+  - Shows **Recent Paper Events** table sourced from `data/paper_trades.jsonl` (including HOLD/SKIP cycles).
+  - Shows cycle counters: total cycles, SKIP/OPEN/CLOSE/HOLD, and BUY/SELL/STRONG_BUY/STRONG_SELL counts.
+  - Shows combined chart for `signal_score` and `current_price` over time.
+  - Sidebar filters support `event_type`, `signal_label`, and `market_regime`.
+  - If no trades are opened yet, dashboard explicitly shows: `No trades yet, but paper cycles are being recorded.`
 - Safety guarantees remain unchanged:
   - `PAPER_TRADING_ONLY = True`
   - No private Binance API usage
