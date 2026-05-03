@@ -34,6 +34,11 @@ Windows (PowerShell/CMD):
   - Shows **Recent Paper Events** table sourced from `data/paper_trades.jsonl` (including HOLD/SKIP cycles).
   - Shows cycle counters: total cycles, SKIP/OPEN/CLOSE/HOLD, and BUY/SELL/STRONG_BUY/STRONG_SELL counts.
   - Shows combined chart for `signal_score` and `current_price` over time.
+  - Shows **Prediction Research (Advisory Only)** as clean dashboard cards/tables, not raw JSON by default.
+  - Prediction block displays: model name/version, accuracy, precision, recall, F1, and directional hit rate.
+  - Includes a confusion matrix table and average forward return by predicted class table.
+  - Shows explicit safeguards: `Advisory only`, `Not used for real trading`, and `No execution authority`.
+  - Displays weak-model warning when model quality is low; raw report is available only under **Show raw model report** expander.
   - Sidebar filters support `event_type`, `signal_label`, and `market_regime`.
   - If no trades are opened yet, dashboard explicitly shows: `No trades yet, but paper cycles are being recorded.`
 - Safety guarantees remain unchanged:

@@ -143,3 +143,90 @@ def test_event_counters_cover_open_close_hold_and_signal_buckets():
     assert counters["sell_count"] == 1
     assert counters["strong_buy_count"] == 1
     assert counters["strong_sell_count"] == 1
+
+
+def test_prediction_section_hides_raw_json_by_default_and_shows_tables(monkeypatch):
+    import pandas as pd
+    import xrp_bot.dashboard as dashboard
+
+    calls = {"json": 0, "table": [], "expander": []}
+
+    class _DummyExpander:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _DummySidebar:
+        def date_input(self, *args, **kwargs):
+            return kwargs.get("value")
+
+        def multiselect(self, *args, **kwargs):
+            return kwargs.get("default", [])
+
+    st = SimpleNamespace(
+        set_page_config=lambda **kwargs: None,
+        title=lambda *a, **k: None,
+        status=lambda *a, **k: None,
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        caption=lambda *a, **k: None,
+        markdown=lambda *a, **k: None,
+        sidebar=_DummySidebar(),
+        columns=lambda n: [SimpleNamespace(metric=lambda *a, **k: None) for _ in range(n)],
+        subheader=lambda *a, **k: None,
+        line_chart=lambda *a, **k: None,
+        bar_chart=lambda *a, **k: None,
+        area_chart=lambda *a, **k: None,
+        table=lambda data: calls["table"].append(data.copy() if isinstance(data, pd.DataFrame) else data),
+        json=lambda *a, **k: calls.__setitem__("json", calls["json"] + 1),
+        metric=lambda *a, **k: None,
+        write=lambda *a, **k: None,
+        dataframe=lambda *a, **k: None,
+        expander=lambda label: (calls["expander"].append(label) or _DummyExpander()),
+    )
+
+    monkeypatch.setitem(__import__("sys").modules, "streamlit", st)
+    monkeypatch.setattr(dashboard, "load_paper_state", lambda: {"fake_balance": 1000.0, "realized_pnl": 0.0, "unrealized_pnl": 0.0})
+    monkeypatch.setattr(
+        dashboard,
+        "load_trades_jsonl",
+        lambda: pd.DataFrame([{"timestamp": pd.Timestamp("2026-01-01T00:00:00Z"), "event_type": "SKIP"}]),
+    )
+    monkeypatch.setattr(dashboard, "load_journal_jsonl", lambda: pd.DataFrame())
+    monkeypatch.setattr(
+        dashboard,
+        "load_prediction_report",
+        lambda: {
+            "model": "logreg",
+            "version": "v1",
+            "metrics": {
+                "accuracy": 0.67,
+                "precision": 0.63,
+                "recall": 0.62,
+                "f1": 0.61,
+                "directional_hit_rate": 0.66,
+                "confusion_matrix": [[8, 2], [3, 7]],
+                "avg_forward_return_by_predicted_class": {"0": -0.001, "1": 0.002},
+            },
+        },
+    )
+
+    dashboard.run_dashboard()
+
+    assert calls["json"] == 1
+    assert "Show raw model report" in calls["expander"]
+    assert len(calls["table"]) == 2
+    confusion_table = calls["table"][0]
+    assert list(confusion_table.columns) == ["Predicted 0", "Predicted 1"]
+    returns_table = calls["table"][1]
+    assert "Predicted Class" in returns_table.columns
+
+
+def test_weak_prediction_warning_appears(monkeypatch):
+    from xrp_bot.dashboard import is_prediction_quality_weak
+
+    assert is_prediction_quality_weak({"accuracy": 0.54, "directional_hit_rate": 0.70})
+    assert is_prediction_quality_weak({"accuracy": 0.70, "directional_hit_rate": 0.54})
+    assert not is_prediction_quality_weak({"accuracy": 0.70, "directional_hit_rate": 0.70})

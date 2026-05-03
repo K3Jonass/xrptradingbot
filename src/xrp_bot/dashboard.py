@@ -119,6 +119,12 @@ def calculate_dashboard_metrics(state: dict, trades_df: pd.DataFrame) -> dict:
     }
 
 
+def is_prediction_quality_weak(metrics: dict) -> bool:
+    accuracy = float(metrics.get("accuracy", 0.0) or 0.0)
+    directional_hit_rate = float(metrics.get("directional_hit_rate", 0.0) or 0.0)
+    return accuracy < 0.55 or directional_hit_rate < 0.55
+
+
 def run_dashboard() -> None:
     import streamlit as st
 
@@ -200,7 +206,46 @@ def run_dashboard() -> None:
 
     if prediction_report:
         st.subheader("Prediction Research (Advisory Only)")
-        st.json({"model": prediction_report.get("model"), "version": prediction_report.get("version"), "metrics": prediction_report.get("metrics", {})})
+        st.caption("Advisory only")
+        st.caption("Not used for real trading")
+        st.caption("No execution authority")
+
+        pred_metrics = prediction_report.get("metrics", {})
+        summary_cols = st.columns(2)
+        summary_cols[0].metric("Model Name", str(prediction_report.get("model", "N/A")))
+        summary_cols[1].metric("Model Version", str(prediction_report.get("version", "N/A")))
+
+        metric_cols = st.columns(6)
+        metric_cols[0].metric("Accuracy", f"{float(pred_metrics.get('accuracy', 0.0) or 0.0):.3f}")
+        metric_cols[1].metric("Precision", f"{float(pred_metrics.get('precision', 0.0) or 0.0):.3f}")
+        metric_cols[2].metric("Recall", f"{float(pred_metrics.get('recall', 0.0) or 0.0):.3f}")
+        metric_cols[3].metric("F1", f"{float(pred_metrics.get('f1', 0.0) or 0.0):.3f}")
+        metric_cols[4].metric("Directional Hit Rate", f"{float(pred_metrics.get('directional_hit_rate', 0.0) or 0.0):.3f}")
+
+        if is_prediction_quality_weak(pred_metrics):
+            st.warning("Prediction quality is currently weak. Do not rely on this model for trading decisions.")
+
+        confusion_matrix = pred_metrics.get("confusion_matrix")
+        if isinstance(confusion_matrix, list) and confusion_matrix:
+            st.markdown("**Confusion Matrix**")
+            cm_df = pd.DataFrame(confusion_matrix)
+            cm_df.index = [f"Actual {i}" for i in range(len(cm_df.index))]
+            cm_df.columns = [f"Predicted {i}" for i in range(len(cm_df.columns))]
+            st.table(cm_df)
+
+        avg_forward_return = pred_metrics.get("avg_forward_return_by_predicted_class")
+        if isinstance(avg_forward_return, dict) and avg_forward_return:
+            st.markdown("**Average Forward Return by Predicted Class**")
+            afr_df = pd.DataFrame(
+                [
+                    {"Predicted Class": str(label), "Average Forward Return": float(value)}
+                    for label, value in avg_forward_return.items()
+                ]
+            )
+            st.table(afr_df)
+
+        with st.expander("Show raw model report"):
+            st.json(prediction_report)
 
     if not journal.empty:
         st.subheader("Trading Journal Intelligence (Read-only)")
