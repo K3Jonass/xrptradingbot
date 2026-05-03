@@ -9,6 +9,7 @@ import pandas as pd
 STATE_FILE = Path("data/paper_state.json")
 TRADES_FILE = Path("data/paper_trades.jsonl")
 JOURNAL_FILE = Path("data/trade_journal.jsonl")
+SIGNAL_LABELS = ["BUY", "SELL", "STRONG_BUY", "STRONG_SELL"]
 
 
 def load_prediction_report(path: Path | str = Path("data/models/model_report.json")) -> dict | None:
@@ -40,14 +41,50 @@ def load_trades_jsonl(path: Path | str = TRADES_FILE) -> pd.DataFrame:
     return df
 
 
-
-
 def load_journal_jsonl(path: Path | str = JOURNAL_FILE) -> pd.DataFrame:
     p = Path(path)
     if not p.exists():
         return pd.DataFrame()
     rows = [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
     return pd.DataFrame(rows)
+
+
+def build_paper_event_counters(events_df: pd.DataFrame) -> dict:
+    counters = {
+        "total_cycles": int(len(events_df)),
+        "skip_count": 0,
+        "open_count": 0,
+        "close_count": 0,
+        "hold_count": 0,
+    }
+    for label in SIGNAL_LABELS:
+        counters[f"{label.lower()}_count"] = 0
+
+    if events_df.empty:
+        return counters
+
+    event_counts = events_df.get("event_type", pd.Series(dtype=str)).value_counts()
+    counters["skip_count"] = int(event_counts.get("SKIP", 0))
+    counters["open_count"] = int(event_counts.get("OPEN", 0))
+    counters["close_count"] = int(event_counts.get("CLOSE", 0))
+    counters["hold_count"] = int(event_counts.get("HOLD", 0))
+
+    signal_counts = events_df.get("signal_label", pd.Series(dtype=str)).value_counts()
+    for label in SIGNAL_LABELS:
+        counters[f"{label.lower()}_count"] = int(signal_counts.get(label, 0))
+    return counters
+
+
+def filter_paper_events(events_df: pd.DataFrame, event_types: list[str], signal_labels: list[str], market_regimes: list[str]) -> pd.DataFrame:
+    filtered = events_df.copy()
+    if "event_type" in filtered.columns and event_types:
+        filtered = filtered[filtered["event_type"].isin(event_types)]
+    if "signal_label" in filtered.columns and signal_labels:
+        filtered = filtered[filtered["signal_label"].isin(signal_labels)]
+    if "market_regime" in filtered.columns and market_regimes:
+        filtered = filtered[filtered["market_regime"].isin(market_regimes)]
+    return filtered
+
 
 def calculate_dashboard_metrics(state: dict, trades_df: pd.DataFrame) -> dict:
     if "pnl" in trades_df.columns:
@@ -95,7 +132,7 @@ def run_dashboard() -> None:
     st.status("Dashboard loaded in read-only paper trading mode.", state="complete")
 
     if trades.empty:
-        st.info("No paper trading data yet. Run xrp-paper --once first.")
+        st.info("No trades yet, but paper cycles are being recorded.")
 
     if "timestamp" in trades.columns and not trades.empty:
         min_dt = trades["timestamp"].min().date()
@@ -104,49 +141,66 @@ def run_dashboard() -> None:
         if isinstance(date_range, tuple) and len(date_range) == 2:
             trades = trades[(trades["timestamp"].dt.date >= date_range[0]) & (trades["timestamp"].dt.date <= date_range[1])]
 
-    if "signal" in trades.columns:
-        signals = sorted(trades["signal"].dropna().unique().tolist())
-        chosen = st.sidebar.multiselect("Signal type", options=signals, default=signals)
-        trades = trades[trades["signal"].isin(chosen)] if chosen else trades
+    event_options = sorted(trades["event_type"].dropna().unique().tolist()) if "event_type" in trades.columns else []
+    signal_options = sorted(trades["signal_label"].dropna().unique().tolist()) if "signal_label" in trades.columns else []
+    regime_options = sorted(trades["market_regime"].dropna().unique().tolist()) if "market_regime" in trades.columns else []
 
-    if "market_regime" in trades.columns:
-        regimes = sorted(trades["market_regime"].dropna().unique().tolist())
-        chosen_regimes = st.sidebar.multiselect("Market regime", options=regimes, default=regimes)
-        trades = trades[trades["market_regime"].isin(chosen_regimes)] if chosen_regimes else trades
+    selected_events = st.sidebar.multiselect("Event type", options=event_options, default=event_options)
+    selected_signals = st.sidebar.multiselect("Signal label", options=signal_options, default=signal_options)
+    selected_regimes = st.sidebar.multiselect("Market regime", options=regime_options, default=regime_options)
 
-    metrics = calculate_dashboard_metrics(state, trades)
+    filtered_events = filter_paper_events(trades, selected_events, selected_signals, selected_regimes)
+
+    metrics = calculate_dashboard_metrics(state, filtered_events)
     prediction_report = load_prediction_report()
     cols = st.columns(3)
     for idx, (k, v) in enumerate(metrics.items()):
         cols[idx % 3].metric(k.replace("_", " ").title(), f"{v:.2f}" if isinstance(v, float) else v)
 
-    if not trades.empty and "pnl" in trades.columns:
-        st.subheader("Equity Curve")
-        base = float(state.get("day_start_balance", 0.0))
-        curve = trades.sort_values("timestamp").copy() if "timestamp" in trades.columns else trades.copy()
-        curve["equity"] = base + curve["pnl"].cumsum()
-        st.line_chart(curve.set_index("timestamp")["equity"] if "timestamp" in curve.columns else curve["equity"])
+    st.subheader("Paper Cycle Summary")
+    counters = build_paper_event_counters(filtered_events)
+    counter_cols = st.columns(5)
+    counter_cols[0].metric("Total Cycles", counters["total_cycles"])
+    counter_cols[1].metric("SKIP", counters["skip_count"])
+    counter_cols[2].metric("OPEN", counters["open_count"])
+    counter_cols[3].metric("CLOSE", counters["close_count"])
+    counter_cols[4].metric("HOLD", counters["hold_count"])
+    sig_cols = st.columns(4)
+    sig_cols[0].metric("BUY", counters["buy_count"])
+    sig_cols[1].metric("SELL", counters["sell_count"])
+    sig_cols[2].metric("STRONG_BUY", counters["strong_buy_count"])
+    sig_cols[3].metric("STRONG_SELL", counters["strong_sell_count"])
 
-        st.subheader("Daily PnL")
-        if "timestamp" in curve.columns:
-            daily = curve.groupby(curve["timestamp"].dt.date)["pnl"].sum()
-            st.bar_chart(daily)
+    if not filtered_events.empty and "timestamp" in filtered_events.columns:
+        chart_data = filtered_events.sort_values("timestamp").set_index("timestamp")
+        selected_cols = [c for c in ["signal_score", "current_price"] if c in chart_data.columns]
+        if selected_cols:
+            st.subheader("Signal Score & Current Price Over Time")
+            st.line_chart(chart_data[selected_cols])
 
-        st.subheader("Trade PnL Distribution")
-        st.bar_chart(curve["pnl"])
+    st.subheader("Recent Paper Events")
+    event_columns = [
+        "timestamp",
+        "event_type",
+        "signal_label",
+        "signal_score",
+        "signal_explanation",
+        "market_regime",
+        "current_price",
+        "reason",
+        "fake_balance",
+        "realized_pnl",
+        "unrealized_pnl",
+    ]
+    existing = [c for c in event_columns if c in filtered_events.columns]
+    if existing:
+        st.dataframe(filtered_events.sort_values("timestamp", ascending=False)[existing], use_container_width=True)
+    else:
+        st.info("No paper events found in data/paper_trades.jsonl yet.")
 
     if prediction_report:
         st.subheader("Prediction Research (Advisory Only)")
         st.json({"model": prediction_report.get("model"), "version": prediction_report.get("version"), "metrics": prediction_report.get("metrics", {})})
-
-    if not trades.empty and "signal_score" in trades.columns and "timestamp" in trades.columns:
-        st.subheader("Signal Score Over Time")
-        st.line_chart(trades.sort_values("timestamp").set_index("timestamp")["signal_score"])
-
-    if not trades.empty and "market_regime" in trades.columns and "timestamp" in trades.columns:
-        st.subheader("Market Regime Over Time")
-        regime_counts = trades.groupby([trades["timestamp"].dt.date, "market_regime"]).size().unstack(fill_value=0)
-        st.area_chart(regime_counts)
 
     if not journal.empty:
         st.subheader("Trading Journal Intelligence (Read-only)")
