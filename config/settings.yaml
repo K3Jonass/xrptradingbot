@@ -58,6 +58,7 @@ telegram:
   bot_token: ""
   chat_id: ""
   base_url: "https://api.telegram.org"
+  hold_skip_summary_every: 10
 
 prediction:
   label_horizon: 4
