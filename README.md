@@ -18,6 +18,10 @@ Windows (PowerShell/CMD):
 
 ### Paper Trading Cycle (safe simulation only)
 - Run one cycle: `xrp-paper --once`
+- Run continuous loop (default): `xrp-paper`
+- Explicit loop mode: `xrp-paper --loop`
+- Loop pacing: `xrp-paper --sleep-seconds 30`
+- Test bounded loop: `xrp-paper --loop --max-cycles 3 --sleep-seconds 0`
 - `--once` prints a full cycle JSON payload with:
   - `current_price`, `signal_label`, `signal_score`, `signal_explanation`
   - `market_regime`, `support`, `resistance`
@@ -30,6 +34,12 @@ Windows (PowerShell/CMD):
 - The cycle always persists files:
   - `data/paper_state.json`
   - `data/paper_trades.jsonl`
+- Loop mode behavior:
+  - If `--once` is set, exactly one paper cycle runs, then exits.
+  - If `--loop` is set, continuous cycles run until Ctrl+C (or `--max-cycles` is reached).
+  - If neither flag is set, default mode runs continuous loop.
+  - Every cycle emits a heartbeat log line with cycle number, timestamp, price, signal, and event type.
+  - Ctrl+C exits gracefully after the current cycle without any real trading side effects.
 - Dashboard visibility for overnight runs:
   - Shows **Recent Paper Events** table sourced from `data/paper_trades.jsonl` (including HOLD/SKIP cycles).
   - Shows cycle counters: total cycles, SKIP/OPEN/CLOSE/HOLD, and BUY/SELL/STRONG_BUY/STRONG_SELL counts.
