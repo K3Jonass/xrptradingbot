@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
+import time
 from pathlib import Path
 
 from .data_fetcher import BinanceMarketDataFetcher
@@ -29,59 +31,88 @@ def handle_command(command: str, runtime, state, current_price: float, risk_stat
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Paper trading CLI placeholder (simulation-only).")
     parser.add_argument("--once", action="store_true")
+    parser.add_argument("--loop", action="store_true")
+    parser.add_argument("--sleep-seconds", type=float, default=30.0)
+    parser.add_argument("--max-cycles", type=int, default=None)
     parser.add_argument("--state-path", default="data/paper_state.json")
     parser.add_argument("--include-prediction", action="store_true")
     return parser.parse_args()
 
 
+def _run_single_cycle(args: argparse.Namespace, state, fetcher: BinanceMarketDataFetcher) -> dict:
+    df = add_indicators(fetcher.fetch_klines(interval="1h", limit=200, symbol="XRPUSDT"))
+    current_price = float(df.iloc[-1]["close"])
+    result = run_paper_cycle(df, "1h", state, Path("data/paper_trades.jsonl"))
+    event = result["event"]
+    signal = str(event.get("signal", "HOLD"))
+    if signal in {"BUY", "STRONG_BUY"} and state.open_position is None:
+        state.open_position = {
+            "entry_price": current_price,
+            "size": 1.0,
+            "opened_at": event.get("timestamp"),
+        }
+        event_type = "OPEN"
+        reason = "signal met entry criteria"
+    elif signal in {"SELL", "STRONG_SELL"} and state.open_position is not None:
+        entry_price = float(state.open_position.get("entry_price", current_price))
+        size = float(state.open_position.get("size", 1.0))
+        pnl = (current_price - entry_price) * size
+        state.realized_pnl += pnl
+        state.fake_balance += pnl
+        state.open_position = None
+        state.unrealized_pnl = 0.0
+        event_type = "CLOSE"
+        reason = "exit signal met"
+    else:
+        event_type = "SKIP"
+        reason = "signal did not meet entry criteria"
+
+    if state.open_position is not None:
+        entry_price = float(state.open_position.get("entry_price", current_price))
+        size = float(state.open_position.get("size", 1.0))
+        state.unrealized_pnl = (current_price - entry_price) * size
+    save_state(state, current_price=current_price, path=Path(args.state_path))
+    return {
+        "current_price": current_price,
+        "event": event,
+        "event_type": event_type,
+        "reason": reason,
+        "signal": signal,
+    }
+
+
 def main() -> None:
     args = parse_args()
+    should_loop = bool(args.loop or not args.once)
+    stop_requested = False
+
+    def _handle_sigint(_signum, _frame):
+        nonlocal stop_requested
+        stop_requested = True
+        print("Received Ctrl+C, finishing current cycle and shutting down gracefully.")
+
+    signal.signal(signal.SIGINT, _handle_sigint)
+
     payload = {
         "mode": "paper",
         "paper_trading_only": True,
         "advisory_only": True,
         "state_path": str(Path(args.state_path)),
         "once": bool(args.once),
+        "loop": bool(should_loop),
+        "sleep_seconds": float(args.sleep_seconds),
     }
-    if args.once:
-        state = load_state(Path(args.state_path))
-        fetcher = BinanceMarketDataFetcher()
-        df = add_indicators(fetcher.fetch_klines(interval="1h", limit=200, symbol="XRPUSDT"))
-        current_price = float(df.iloc[-1]["close"])
-        result = run_paper_cycle(df, "1h", state, Path("data/paper_trades.jsonl"))
-        event = result["event"]
-        signal = str(event.get("signal", "HOLD"))
-        if signal in {"BUY", "STRONG_BUY"} and state.open_position is None:
-            state.open_position = {
-                "entry_price": current_price,
-                "size": 1.0,
-                "opened_at": event.get("timestamp"),
-            }
-            event_type = "OPEN"
-            reason = "signal met entry criteria"
-        elif signal in {"SELL", "STRONG_SELL"} and state.open_position is not None:
-            entry_price = float(state.open_position.get("entry_price", current_price))
-            size = float(state.open_position.get("size", 1.0))
-            pnl = (current_price - entry_price) * size
-            state.realized_pnl += pnl
-            state.fake_balance += pnl
-            state.open_position = None
-            state.unrealized_pnl = 0.0
-            event_type = "CLOSE"
-            reason = "exit signal met"
-        else:
-            event_type = "SKIP"
-            reason = "signal did not meet entry criteria"
-
-        if state.open_position is not None:
-            entry_price = float(state.open_position.get("entry_price", current_price))
-            size = float(state.open_position.get("size", 1.0))
-            state.unrealized_pnl = (current_price - entry_price) * size
-        save_state(state, current_price=current_price, path=Path(args.state_path))
-
-        payload.update({
-            "current_price": current_price,
-            "signal_label": event.get("signal_label", signal),
+    state = load_state(Path(args.state_path))
+    fetcher = BinanceMarketDataFetcher()
+    cycle_count = 0
+    while True:
+        try:
+            cycle_count += 1
+            cycle_result = _run_single_cycle(args, state, fetcher)
+            event = cycle_result["event"]
+            payload.update({
+            "current_price": cycle_result["current_price"],
+            "signal_label": event.get("signal_label", cycle_result["signal"]),
             "signal_score": float(event.get("signal_score", 0.0)),
             "signal_explanation": event.get("signal_explanation", ""),
             "market_regime": event.get("market_regime", "unknown"),
@@ -94,9 +125,28 @@ def main() -> None:
             "realized_pnl": float(state.realized_pnl),
             "unrealized_pnl": float(state.unrealized_pnl),
             "risk_status": "OK",
-            "event_type": event_type,
-            "reason": reason,
+            "event_type": cycle_result["event_type"],
+            "reason": cycle_result["reason"],
+            "cycle": cycle_count,
         })
+            print(json.dumps({
+                "heartbeat": True,
+                "cycle": cycle_count,
+                "timestamp": event.get("timestamp"),
+                "price": cycle_result["current_price"],
+                "signal": cycle_result["signal"],
+                "event_type": cycle_result["event_type"],
+            }))
+            if not should_loop:
+                break
+            if args.max_cycles is not None and cycle_count >= args.max_cycles:
+                break
+            if stop_requested:
+                break
+            time.sleep(max(0.0, float(args.sleep_seconds)))
+        except KeyboardInterrupt:
+            print("Received Ctrl+C, shutting down gracefully.")
+            break
 
     if args.include_prediction:
         pred_path = Path("data/models/model_report.json")
