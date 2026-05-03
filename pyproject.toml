@@ -31,6 +31,7 @@ xrp-paper = "xrp_bot.paper_cli:main"
 xrp-journal = "xrp_bot.journal_cli:main"
 xrp-dashboard = "xrp_bot.dashboard_cli:main"
 xrp-research = "xrp_bot.research_cli:main"
+xrp-telegram-test = "xrp_bot.telegram_test_cli:main"
 
 xrp-healthcheck = "xrp_bot.healthcheck_cli:main"
 xrp-predict = "xrp_bot.predict_cli:main"

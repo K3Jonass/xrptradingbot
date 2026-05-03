@@ -9,22 +9,28 @@ from pathlib import Path
 from .data_fetcher import BinanceMarketDataFetcher
 from .indicators import add_indicators
 from .paper_trading import load_state, run_paper_cycle, save_state
+from .config import TELEGRAM, SYMBOL
+from .telegram import TelegramAlertEngine, TelegramRuntimeState, format_alert_message, should_send_alert
 
 
 def handle_command(command: str, runtime, state, current_price: float, risk_status: str) -> str:
     cmd = (command or "").strip().lower()
     if cmd == "/pause":
         runtime.active = False
-        return "Bot paused."
+        runtime.paused = True
+        return "Paper bot paused."
     if cmd == "/resume":
         runtime.active = True
-        return "Bot resumed."
+        runtime.paused = False
+        return "Paper bot resumed."
     if cmd == "/status":
-        return (
-            f"Status: {'active' if runtime.active else 'paused'} | "
-            f"Balance: {getattr(state, 'fake_balance', 0):.2f} | "
-            f"Price: {current_price:.6f} | Risk: {risk_status}"
-        )
+        return f"Status: {'active' if runtime.active else 'paused'} | Balance: {state.fake_balance:.2f} | Price: {current_price:.6f}"
+    if cmd == "/summary":
+        return f"Cycle: {runtime.cycle_count} | Realized: {state.realized_pnl:.2f} | Unrealized: {state.unrealized_pnl:.2f}"
+    if cmd == "/risk":
+        return f"Risk status: {risk_status}"
+    if cmd == "/lastsignal":
+        return f"Last signal sent: {runtime.last_signal_sent or 'none'}"
     return "Unknown command."
 
 
@@ -94,6 +100,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, _handle_sigint)
 
     payload = {
+        "symbol": SYMBOL,
         "mode": "paper",
         "paper_trading_only": True,
         "advisory_only": True,
@@ -104,13 +111,25 @@ def main() -> None:
     }
     state = load_state(Path(args.state_path))
     fetcher = BinanceMarketDataFetcher()
+    telegram = TelegramAlertEngine(TELEGRAM)
+    runtime = TelegramRuntimeState()
     cycle_count = 0
     while True:
         try:
             cycle_count += 1
+            runtime.cycle_count = cycle_count
+            for cmd in telegram.poll_commands(runtime):
+                reply = handle_command(cmd, runtime, state, 0.0, "OK")
+                telegram.send_message(reply)
+            if not runtime.active:
+                time.sleep(max(0.0, float(args.sleep_seconds)))
+                if args.max_cycles is not None and cycle_count >= args.max_cycles:
+                    break
+                continue
             cycle_result = _run_single_cycle(args, state, fetcher)
             event = cycle_result["event"]
             payload.update({
+            "timestamp": event.get("timestamp"),
             "current_price": cycle_result["current_price"],
             "signal_label": event.get("signal_label", cycle_result["signal"]),
             "signal_score": float(event.get("signal_score", 0.0)),
@@ -129,6 +148,12 @@ def main() -> None:
             "reason": cycle_result["reason"],
             "cycle": cycle_count,
         })
+            if should_send_alert(cycle_result["signal"], cycle_result["event_type"], runtime, telegram.hold_skip_summary_every):
+                text = format_alert_message(payload, cycle_result["event_type"])
+                if telegram.send_message(text):
+                    runtime.last_alert_timestamp = payload.get("timestamp")
+                    runtime.last_signal_sent = cycle_result["signal"]
+
             print(json.dumps({
                 "heartbeat": True,
                 "cycle": cycle_count,
