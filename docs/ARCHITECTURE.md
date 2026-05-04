@@ -9,3 +9,7 @@
 - Commands supported: `/status`, `/summary`, `/risk`, `/pause`, `/resume`, `/lastsignal` (paper mode only).
 - Runtime state includes active/paused, cycle count, last alert timestamp, and last signal sent.
 - CLI test command: `xrp-telegram-test` validates env config and sends a test message only.
+
+## Validation Architecture (Stage 15)
+- `validation.py` computes soak report metrics and readiness score.
+- Dashboard exposes soak status, readiness score, failed gates, and explicit allow/block recommendation for Spot Testnet dry-run.

@@ -73,3 +73,7 @@ Windows (PowerShell/CMD):
 - Commands supported: `/status`, `/summary`, `/risk`, `/pause`, `/resume`, `/lastsignal` (paper mode only).
 - Runtime state includes active/paused, cycle count, last alert timestamp, and last signal sent.
 - CLI test command: `xrp-telegram-test` validates env config and sends a test message only.
+
+## Stage 15: Paper Soak Testing + Strategy Validation
+- Added a professional paper soak validation layer with readiness scoring and promotion gates.
+- Paper-only remains enforced (`PAPER_TRADING_ONLY = True`), no live/testnet order placement.

@@ -8,3 +8,7 @@
 - Commands supported: `/status`, `/summary`, `/risk`, `/pause`, `/resume`, `/lastsignal` (paper mode only).
 - Runtime state includes active/paused, cycle count, last alert timestamp, and last signal sent.
 - CLI test command: `xrp-telegram-test` validates env config and sends a test message only.
+
+## Stage 15 Safety Validation
+- Promotion to Spot Testnet is blocked unless soak gates pass.
+- Any safety bypass, duplicate-order incident, or unresolved reconciliation warning blocks promotion.

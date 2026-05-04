@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from .validation import build_soak_test_report, calculate_readiness
+
 
 STATE_FILE = Path("data/paper_state.json")
 TRADES_FILE = Path("data/paper_trades.jsonl")
@@ -47,6 +49,18 @@ def load_journal_jsonl(path: Path | str = JOURNAL_FILE) -> pd.DataFrame:
         return pd.DataFrame()
     rows = [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
     return pd.DataFrame(rows)
+
+
+def load_validation_health(path: Path | str = Path("data/validation_health.json")) -> dict:
+    p = Path(path)
+    if not p.exists():
+        return {
+            "reconciliation_unresolved": 0,
+            "duplicate_order_incidents": 0,
+            "safety_bypass_incidents": 0,
+            "emergency_stop_incidents": 0,
+        }
+    return json.loads(p.read_text())
 
 
 def build_paper_event_counters(events_df: pd.DataFrame) -> dict:
@@ -158,10 +172,26 @@ def run_dashboard() -> None:
     filtered_events = filter_paper_events(trades, selected_events, selected_signals, selected_regimes)
 
     metrics = calculate_dashboard_metrics(state, filtered_events)
+    health = load_validation_health()
+    soak_report = build_soak_test_report(filtered_events, journal)
+    readiness = calculate_readiness(soak_report, health)
     prediction_report = load_prediction_report()
     cols = st.columns(3)
     for idx, (k, v) in enumerate(metrics.items()):
         cols[idx % 3].metric(k.replace("_", " ").title(), f"{v:.2f}" if isinstance(v, float) else v)
+
+    st.subheader("Soak Test Review")
+    review_cols = st.columns(4)
+    review_cols[0].metric("Soak Status", readiness["soak_test_status"])
+    review_cols[1].metric("Readiness Score", f"{readiness['readiness_score']:.2f}/100")
+    review_cols[2].metric("Testnet Allowed", "YES" if readiness["testnet_allowed"] else "NO")
+    review_cols[3].metric("Failed Gates", len(readiness["failed_gates"]))
+    st.write("Recommended Action:", readiness["recommended_action"])
+    if readiness["failed_gates"]:
+        st.warning("Promotion blocked by: " + ", ".join(readiness["failed_gates"]))
+
+    st.subheader("Paper Soak Metrics")
+    st.json(soak_report)
 
     st.subheader("Paper Cycle Summary")
     counters = build_paper_event_counters(filtered_events)
